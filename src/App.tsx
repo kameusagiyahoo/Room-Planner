@@ -4,7 +4,7 @@ import { PlanEditor } from './components/PlanEditor';
 import type { DrawTool } from './components/PlanEditor';
 import { Viewer3D } from './components/Viewer3D';
 import type { HouseProject, Point } from './domain/model';
-import { emptyProject, exampleProject } from './domain/model';
+import { emptyProject, exampleProject, emptyFloor } from './domain/model';
 import { roomArea, roundGrid, distance, wallPoints } from './domain/geometry';
 import { insertRectangle } from './domain/topology';
 import { addOpening, moveOpening } from './domain/openings';
@@ -28,6 +28,7 @@ export default function App(){
   const [project,setProject]=useState<HouseProject>(()=>exampleProject());
   const [loaded,setLoaded]=useState(false);
   const [tool,setTool]=useState<DrawTool>('select');
+  const [activeFloorId,setActiveFloorId]=useState<string>('floor-1');
   const [view,setView]=useState<ViewMode>('split');
   const [selectedRoom,setSelectedRoom]=useState<string|null>(null);
   const [selectedWall,setSelectedWall]=useState<string|null>(null);
@@ -42,7 +43,8 @@ export default function App(){
   const [remoteMeta,setRemoteMeta]=useState<RemoteMeta|null>(null);
   const [busy,setBusy]=useState(false);
   const history=useRef<HouseProject[]>([]),redo=useRef<HouseProject[]>([]);
-  const floor=project.floors[0];
+  const activeFloorIndex=Math.max(0,project.floors.findIndex(f=>f.id===activeFloorId));
+  const floor=project.floors[activeFloorIndex];
   const issues=useMemo(()=>validateProject(project),[project]);
   const hasErrors=issues.some(x=>x.severity==='error');
   const area=floor.rooms.reduce((s,r)=>s+roomArea(floor,r),0);
@@ -65,7 +67,7 @@ export default function App(){
     loadDraft().then(draft=>{
       if(!alive)return;
       if(draft&&validateProject(draft).every(issue=>issue.severity!=='error')){
-        setProject(draft);setRemoteId(draft.id);setStatus('作業中の間取りを復元しました');
+        setProject(draft);setRemoteId(draft.id);setActiveFloorId(draft.floors[0].id);setStatus('作業中の間取りを復元しました');
       }
     }).catch(()=>setStatus('ローカル一時保存を利用できません')).finally(()=>{if(alive)setLoaded(true);});
     return ()=>{alive=false;};
@@ -92,45 +94,45 @@ export default function App(){
     }catch(e){setStatus(e instanceof Error?e.message:String(e));}
   };
   const addRoom=(a:Point,b:Point)=>edit(next=>{
-    const floor=next.floors[0];
+    const floor=next.floors[activeFloorIndex];
     insertRectangle(floor,a,b,'部屋'+(floor.rooms.length+1));
   },'部屋を追加しました');
   const moveVertex=(id:string,p:Point)=>edit(next=>{
-    const v=next.floors[0].vertices.find(x=>x.id===id);
+    const v=next.floors[activeFloorIndex].vertices.find(x=>x.id===id);
     if(!v)throw Error('頂点がありません');
     v.x=roundGrid(p.x);v.y=roundGrid(p.y);
   },'頂点を移動しました');
   const addDoorOrWindow=(kind:'door'|'window',wallId:string,offset:number)=>edit(next=>{
-    const opening=addOpening(next.floors[0],wallId,offset,kind);
+    const opening=addOpening(next.floors[activeFloorIndex],wallId,offset,kind);
     setSelectedOpening(opening.id);setSelectedRoom(null);setSelectedWall(null);
   },kind==='door'?'ドアを追加しました':'窓を追加しました');
   const repositionOpening=(id:string,offset:number)=>edit(next=>{
-    moveOpening(next.floors[0],id,offset);
+    moveOpening(next.floors[activeFloorIndex],id,offset);
   },'開口部を移動しました');
   const updateWallThickness=(id:string,thickness:number)=>edit(next=>{
-    const wall=next.floors[0].walls.find(w=>w.id===id);
+    const wall=next.floors[activeFloorIndex].walls.find(w=>w.id===id);
     if(wall)wall.thickness=thickness;
   },'壁厚を更新しました');
   const updateOpening=(id:string,patch:Record<string,string|number|boolean>)=>edit(next=>{
-    const opening=next.floors[0].openings.find(o=>o.id===id);
+    const opening=next.floors[activeFloorIndex].openings.find(o=>o.id===id);
     if(opening)Object.assign(opening,patch);
   },'開口部を更新しました');
   const removeOpening=(id:string)=>edit(next=>{
-    next.floors[0].openings=next.floors[0].openings.filter(o=>o.id!==id);
+    next.floors[activeFloorIndex].openings=next.floors[activeFloorIndex].openings.filter(o=>o.id!==id);
     setSelectedOpening(null);
   },'開口部を削除しました');
   const place=(p:Point)=>edit(next=>{
-    const f=addFurniture(next.floors[0],preset,p);
+    const f=addFurniture(next.floors[activeFloorIndex],preset,p);
     selectFurniture(f.id);
   },'家具を追加しました');
   const moveFurniture=(id:string,p:Point)=>edit(next=>{
-    changeFurniture(next.floors[0],id,{x:roundGrid(p.x),y:roundGrid(p.y)});
+    changeFurniture(next.floors[activeFloorIndex],id,{x:roundGrid(p.x),y:roundGrid(p.y)});
   },'家具を移動しました');
   const updateFurniture=(id:string,patch:Record<string,string|number>)=>edit(next=>{
-    changeFurniture(next.floors[0],id,patch);
+    changeFurniture(next.floors[activeFloorIndex],id,patch);
   },'家具を更新しました');
   const deleteFurniture=(id:string)=>edit(next=>{
-    next.floors[0].furniture=next.floors[0].furniture.filter(f=>f.id!==id);
+    next.floors[activeFloorIndex].furniture=next.floors[activeFloorIndex].furniture.filter(f=>f.id!==id);
     selectFurniture(null);
   },'家具を削除しました');
   const undo=()=>{
@@ -149,7 +151,7 @@ export default function App(){
       const errors=issues.filter(i=>i.severity==='error');
       if(errors.length)throw Error('不正なファイル: '+errors[0].message);
       const next=parsed as HouseProject;
-      replace(next,'JSONを読み込みました');
+      replace(next,'JSONを読み込みました');setActiveFloorId(next.floors[0].id);
       setRemoteId(next.id);setRemoteMeta(null);selectRoom(null);
     }catch(err){setStatus('読み込み失敗: '+String(err));}
   };
@@ -176,15 +178,33 @@ export default function App(){
       const issues=validateProject(file.project);
       const errors=issues.filter(i=>i.severity==='error');
       if(errors.length)throw Error('遠隔JSONの検証に失敗: '+errors[0].message);
-      replace(file.project,'GitHubから読み込みました');
+      replace(file.project,'GitHubから読み込みました');setActiveFloorId(file.project.floors[0].id);
       setRemoteMeta({key:remoteKey(target,remoteId),sha:file.sha});
       selectRoom(null);
     }catch(e){setStatus('GitHub読込失敗: '+String(e));}
     finally{setBusy(false);}
   };
+  const switchFloor=(id:string)=>{
+    setActiveFloorId(id);setSelectedRoom(null);setSelectedWall(null);setSelectedOpening(null);
+    setSelectedFurniture(null);setMeasurePoints([]);
+  };
+  const addFloor=()=>{
+    const f=emptyFloor((project.floors.length+1)+'階');
+    f.elevation=project.floors.reduce((max,x)=>Math.max(max,x.elevation+x.ceilingHeight+.2),0);
+    edit(next=>{next.floors.push(f);},'階を追加しました');
+    switchFloor(f.id);
+  };
+  const renameFloor=(name:string)=>edit(next=>{next.floors[activeFloorIndex].name=name;},'階の名前を更新しました');
+  const changeElevation=(value:number)=>edit(next=>{next.floors[activeFloorIndex].elevation=value;},'階の高さを更新しました');
+  const removeFloor=()=>{
+    if(project.floors.length<=1){setStatus('最低1階が必要です');return;}
+    const nextId=project.floors.find(f=>f.id!==floor.id)!.id;
+    edit(next=>{next.floors.splice(activeFloorIndex,1);},'階を削除しました');
+    switchFloor(nextId);
+  };
   const setName=(name:string)=>edit(next=>{next.name=name;},'名前を変更しました');
-  const createNew=()=>{const p=emptyProject();replace(p,'新しい間取りを作成しました');selectRoom(null);setRemoteMeta(null);setRemoteId(p.id);};
-  const startExample=()=>{const p=exampleProject();replace(p,'サンプルを読み込みました');selectRoom(null);setRemoteMeta(null);setRemoteId(p.id);};
+  const createNew=()=>{const p=emptyProject();replace(p,'新しい間取りを作成しました');setActiveFloorId(p.floors[0].id);selectRoom(null);setRemoteMeta(null);setRemoteId(p.id);};
+  const startExample=()=>{const p=exampleProject();replace(p,'サンプルを読み込みました');setActiveFloorId(p.floors[0].id);selectRoom(null);setRemoteMeta(null);setRemoteId(p.id);};
   return <div className="app">
     <header className="header">
       <div className="brand"><strong>Room Planner</strong><span>GitHub Pages / v0.1</span></div>
@@ -202,6 +222,17 @@ export default function App(){
           <div className="actions"><button onClick={()=>download(project.id+'.json',JSON.stringify(project,null,2)+'\n')}>JSON出力</button>
             <label className="file-button">JSON読込<input type="file" accept=".json,application/json" onChange={importFile}/></label></div>
           <small>編集データはIndexedDBへ自動一時保存（{draftStatus}）</small>
+        </section>
+        <section className="panel">
+          <h2>階の管理</h2>
+          <label>表示する階<select value={floor.id} onChange={e=>switchFloor(e.target.value)}>
+            {project.floors.map(f=><option key={f.id} value={f.id}>{f.name}（床高さ {f.elevation.toFixed(2)}m）</option>)}
+          </select></label>
+          <label>階の名前<input value={floor.name} onChange={e=>renameFloor(e.target.value)}/></label>
+          <label>床高さ (m)<input type="number" step=".1" value={floor.elevation} onChange={e=>changeElevation(Number(e.target.value))}/></label>
+          <div className="actions"><button onClick={addFloor}>階を追加</button>
+            <button onClick={removeFloor} disabled={project.floors.length<=1}>現在の階を削除</button></div>
+          <small>各階の間取り・家具・ドア・窓は独立して編集し、プロジェクトJSONには全階を保存します。階段と階間移動は未対応です。</small>
         </section>
         <section className="panel">
           <h2>2D編集</h2>
@@ -242,7 +273,7 @@ export default function App(){
             <div className="actions"><button onClick={()=>updateFurniture(activeFurniture.id,{rotation:(activeFurniture.rotation+90)%360})}>90°回転</button>
             <button onClick={()=>deleteFurniture(activeFurniture.id)}>削除</button></div>
           </div>}
-          {activeRoom&&<div className="inspector"><label>部屋名<input value={activeRoom.name} onChange={e=>edit(next=>{const r=next.floors[0].rooms.find(r=>r.id===activeRoom.id);if(r)r.name=e.target.value;},'部屋名を変更')}/></label>
+          {activeRoom&&<div className="inspector"><label>部屋名<input value={activeRoom.name} onChange={e=>edit(next=>{const r=next.floors[activeFloorIndex].rooms.find(r=>r.id===activeRoom.id);if(r)r.name=e.target.value;},'部屋名を変更')}/></label>
             <div>{roomArea(floor,activeRoom).toFixed(2)}㎡ / {(roomArea(floor,activeRoom)/1.62).toFixed(1)}帖</div></div>}
 
           {activeWall&&<div className="inspector">
@@ -286,11 +317,11 @@ export default function App(){
         </section>
       </aside>
       <main className={'workspace '+view}>
-        {view!=='3d'&&<section className="view-pane"><h2>2D間取り <span>1mグリッド / SVG</span></h2>
+        {view!=='3d'&&<section className="view-pane"><h2>2D間取り <span>{floor.name} / 1mグリッド / SVG</span></h2>
           <div className="view-body"><PlanEditor floor={floor} tool={tool} measurePoints={measurePoints} onMeasurePoint={addMeasurePoint} selectedRoom={selectedRoom} selectedWall={selectedWall} selectedOpening={selectedOpening} selectedFurniture={selectedFurniture}
           onSelectRoom={selectRoom} onSelectWall={selectWall} onSelectOpening={selectOpening} onSelectFurniture={selectFurniture}
           onAddRoom={addRoom} onMoveVertex={moveVertex} onAddOpening={addDoorOrWindow} onMoveOpening={repositionOpening} onAddFurniture={place} onMoveFurniture={moveFurniture}/></div></section>}
-        {view!=='2d'&&<section className="view-pane"><h2>3D表示 <span>俯瞰 / 衝突判定付き歩行</span></h2>
+        {view!=='2d'&&<section className="view-pane"><h2>3D表示 <span>{floor.name} / 俯瞰 / 衝突判定付き歩行</span></h2>
           <div className="view-body"><Viewer3D floor={floor}/></div></section>}
       </main>
       <aside className="right-pane">
@@ -304,7 +335,7 @@ export default function App(){
         </section>
         <section className="panel"><h2>実装状況</h2>
           <p>利用可能：矩形部屋、頂点ドラッグ、面積、2D/3D、JSON入出力、GitHub手動保存</p>
-          <p>今後：家具カタログ、階段・複数階、歩行の改良。現在：基本的な3D歩行と壁・ドア・窓・家具の衝突判定</p>
+          <p>現在：複数階の個別編集、家具カタログ、3D歩行と衝突判定。今後：階段、階間移動、GLB家具読み込み</p>
         </section>
       </aside>
     </div>

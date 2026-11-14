@@ -14,7 +14,8 @@
 - [x] Furniture–wall and furniture–furniture top-down interference checks, conservative two-point route clearance estimate
 - [x] Parametric lightweight 3D furniture primitives (sofa, bed, dining, chair, storage, kitchen, appliances)
 - [ ] GLB/GLTF furniture loading
-- [ ] Multi-floor editor and navigation
+- [x] Multi-floor project editing, independent floor selection and per-floor 2D/3D view
+- [ ] Stairs and navigation between floors
 - [ ] Real floorplan sample and trace/calibration workflow
 - [ ] Mobile usability, performance, regression/screenshot tests
 - [ ] Schema migrations and robust diff/conflict UI
