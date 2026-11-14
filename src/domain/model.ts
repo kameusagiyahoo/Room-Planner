@@ -13,10 +13,11 @@ export type Furniture = {
   id: string; name: string; kind: string; x: number; y: number;
   width: number; depth: number; height: number; rotation: number;
 };
+export type Stair={id:string;x:number;y:number;width:number;run:number;rotation:number;toFloorId:string};
 export type Floor = {
   id: string; name: string; elevation: number; ceilingHeight: number;
   vertices: Vertex[]; walls: Wall[]; rooms: Room[];
-  openings: Opening[]; furniture: Furniture[];
+  openings: Opening[]; furniture: Furniture[]; stairs?: Stair[];
 };
 export type HouseProject = {
   schemaVersion: typeof SCHEMA_VERSION; id: string; name: string;
@@ -27,7 +28,7 @@ export function newId(prefix = 'id'): string {
 }
 export const emptyFloor = (name = '1階'): Floor => ({
   id: newId('floor'), name, elevation: 0, ceilingHeight: 2.4,
-  vertices: [], walls: [], rooms: [], openings: [], furniture: []
+  vertices: [], walls: [], rooms: [], openings: [], furniture: [], stairs: []
 });
 export const emptyProject = (): HouseProject => ({
   schemaVersion: SCHEMA_VERSION, id: newId('project'), name: '新しい間取り',

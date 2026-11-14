@@ -9,6 +9,7 @@ import { roomArea, roundGrid, distance, wallPoints } from './domain/geometry';
 import { insertRectangle } from './domain/topology';
 import { addOpening, moveOpening } from './domain/openings';
 import {PRESETS,addFurniture,changeFurniture} from './domain/furniture';
+import {addStair,stairDestination} from './domain/stairs';
 import {nearestFurnitureClearance,furnitureClearances,minimumPassageDiameter} from './domain/clearance';
 import { validateProject } from './domain/validation';
 import { loadDraft, saveDraft } from './storage/local';
@@ -35,6 +36,8 @@ export default function App(){
   const [selectedOpening,setSelectedOpening]=useState<string|null>(null);
   const [selectedFurniture,setSelectedFurniture]=useState<string|null>(null);
   const [preset,setPreset]=useState<string>('sofa');
+  const [selectedStair,setSelectedStair]=useState<string|null>(null);
+  const [stairTarget,setStairTarget]=useState<string>('');
   const [measurePoints,setMeasurePoints]=useState<Point[]>([]);
   const [status,setStatus]=useState('サンプルを読み込みました');
   const [draftStatus,setDraftStatus]=useState<'保存中'|'一時保存済み'|'未保存'>('未保存');
@@ -52,6 +55,8 @@ export default function App(){
   const activeWall=floor.walls.find(w=>w.id===selectedWall);
   const activeOpening=floor.openings.find(o=>o.id===selectedOpening);
   const activeFurniture=floor.furniture.find(f=>f.id===selectedFurniture);
+  const activeStair=(floor.stairs??[]).find(s=>s.id===selectedStair);
+  const otherFloors=project.floors.filter(f=>f.id!==floor.id);
   const nearestGap=activeFurniture?nearestFurnitureClearance(floor,activeFurniture.id):null;
   const collisionWarnings=furnitureClearances(floor).filter(item=>item.overlap);
   const measureDistance=measurePoints.length===2?distance(measurePoints[0],measurePoints[1]):null;
@@ -61,6 +66,26 @@ export default function App(){
   const selectWall=(id:string|null)=>{setSelectedWall(id);setSelectedRoom(null);setSelectedOpening(null);};
   const selectOpening=(id:string|null)=>{setSelectedOpening(id);setSelectedWall(null);setSelectedRoom(null);};
 
+  const selectStair=(id:string|null)=>{setSelectedStair(id);setSelectedFurniture(null);setSelectedRoom(null);setSelectedWall(null);setSelectedOpening(null);};
+  const placeStair=(p:Point)=>edit(next=>{
+    const destination=stairTarget&&stairTarget!==floor.id?stairTarget:otherFloors[0]?.id;
+    if(!destination)throw Error('先に移動先の階を追加してください');
+    const stair=addStair(next.floors[activeFloorIndex],destination,p);
+    selectStair(stair.id);
+  },'階段を配置しました');
+  const updateStair=(id:string,patch:Record<string,string|number>)=>edit(next=>{
+    const stair=(next.floors[activeFloorIndex].stairs??[]).find(s=>s.id===id);
+    if(stair)Object.assign(stair,patch);
+  },'階段を更新しました');
+  const removeStair=(id:string)=>edit(next=>{
+    const f=next.floors[activeFloorIndex];f.stairs=(f.stairs??[]).filter(s=>s.id!==id);
+    setSelectedStair(null);
+  },'階段を削除しました');
+  const goViaStair=(id:string)=>{
+    const target=stairDestination(project,floor.id,id);
+    if(!target){setStatus('移動先の階がありません');return;}
+    switchFloor(target.floorId);setView('3d');setStatus('階段で移動先の階を表示しました');
+  };
   const selectFurniture=(id:string|null)=>{setSelectedFurniture(id);setSelectedRoom(null);setSelectedWall(null);setSelectedOpening(null);};
   useEffect(()=>{
     let alive=true;
@@ -243,9 +268,27 @@ export default function App(){
             <button aria-pressed={tool==='door'} onClick={()=>{setTool('door');setView('2d');}}>ドア</button>
             <button aria-pressed={tool==='window'} onClick={()=>{setTool('window');setView('2d');}}>窓</button>
             <button aria-pressed={tool==='furniture'} onClick={()=>{setTool('furniture');setView('2d');}}>家具追加</button>
+            <button aria-pressed={tool==='stairs'} onClick={()=>{setTool('stairs');setView('2d');}}>階段配置</button>
             <button aria-pressed={tool==='measure'} onClick={()=>{setTool('measure');setView('2d');setMeasurePoints([]);}}>通路計測</button>
           </div>
-          <small>{tool==='room'?'間取りの上でドラッグして矩形部屋を追加':tool==='vertex'?'黄色い頂点をドラッグ（共有壁も連動）':tool==='door'?'壁をクリックしてドアを配置':tool==='window'?'壁をクリックして窓を配置':tool==='furniture'?'家具を選び、図面をタップして配置':tool==='measure'?'計測したい経路上の2点を順番にタップ':'部屋・壁・ドア・窓を選択。開口部はドラッグで移動できます'}</small>
+          <small>{tool==='room'?'間取りの上でドラッグして矩形部屋を追加':tool==='vertex'?'黄色い頂点をドラッグ（共有壁も連動）':tool==='door'?'壁をクリックしてドアを配置':tool==='window'?'壁をクリックして窓を配置':tool==='furniture'?'家具を選び、図面をタップして配置':tool==='measure'?'計測したい経路上の2点を順番にタップ':tool==='stairs'?'移動先の階を選び、図面をタップして階段を配置':'部屋・壁・ドア・窓を選択。開口部はドラッグで移動できます'}</small>
+          {tool==='stairs'&&<label>階段の移動先<select value={stairTarget||otherFloors[0]?.id||''} onChange={e=>setStairTarget(e.target.value)}>
+            {otherFloors.map(f=><option key={f.id} value={f.id}>{f.name}</option>)}
+          </select>{!otherFloors.length&&<small>先に2階などを追加してください。</small>}</label>}
+          {activeStair&&<div className="inspector">
+            <h3>階段の設定</h3>
+            <label>移動先<select value={activeStair.toFloorId} onChange={e=>updateStair(activeStair.id,{toFloorId:e.target.value})}>
+              {otherFloors.map(f=><option key={f.id} value={f.id}>{f.name}</option>)}
+            </select></label>
+            {(['x','y','width','run','rotation'] as const).map(field=><label key={field}>
+              {({x:'X (m)',y:'Y (m)',width:'幅 (m)',run:'水平長 (m)',rotation:'回転 (度)'})[field]}
+              <input type="number" step={field==='rotation'?15:.1} value={activeStair[field]}
+                onChange={e=>updateStair(activeStair.id,{[field]:Number(e.target.value)})}/>
+            </label>)}
+            <div className="actions"><button onClick={()=>goViaStair(activeStair.id)}>移動先の階へ</button>
+              <button onClick={()=>removeStair(activeStair.id)}>階段削除</button></div>
+            <small>階段の3D表示は段板の簡易モデルです。歩行による連続昇降ではなく、階切替で移動します。</small>
+          </div>}
           {tool==='measure'&&<div className="inspector">
             <h3>通路の幅を概算</h3>
             {measureDistance===null?<small>図面の2点をタップして経路を指定します。</small>:<>
@@ -318,9 +361,9 @@ export default function App(){
       </aside>
       <main className={'workspace '+view}>
         {view!=='3d'&&<section className="view-pane"><h2>2D間取り <span>{floor.name} / 1mグリッド / SVG</span></h2>
-          <div className="view-body"><PlanEditor floor={floor} tool={tool} measurePoints={measurePoints} onMeasurePoint={addMeasurePoint} selectedRoom={selectedRoom} selectedWall={selectedWall} selectedOpening={selectedOpening} selectedFurniture={selectedFurniture}
-          onSelectRoom={selectRoom} onSelectWall={selectWall} onSelectOpening={selectOpening} onSelectFurniture={selectFurniture}
-          onAddRoom={addRoom} onMoveVertex={moveVertex} onAddOpening={addDoorOrWindow} onMoveOpening={repositionOpening} onAddFurniture={place} onMoveFurniture={moveFurniture}/></div></section>}
+          <div className="view-body"><PlanEditor floor={floor} tool={tool} measurePoints={measurePoints} onMeasurePoint={addMeasurePoint} selectedRoom={selectedRoom} selectedWall={selectedWall} selectedOpening={selectedOpening} selectedFurniture={selectedFurniture} selectedStair={selectedStair}
+          onSelectRoom={selectRoom} onSelectWall={selectWall} onSelectOpening={selectOpening} onSelectFurniture={selectFurniture} onSelectStair={selectStair}
+          onAddRoom={addRoom} onMoveVertex={moveVertex} onAddOpening={addDoorOrWindow} onMoveOpening={repositionOpening} onAddStair={placeStair} onAddFurniture={place} onMoveFurniture={moveFurniture}/></div></section>}
         {view!=='2d'&&<section className="view-pane"><h2>3D表示 <span>{floor.name} / 俯瞰 / 衝突判定付き歩行</span></h2>
           <div className="view-body"><Viewer3D floor={floor}/></div></section>}
       </main>

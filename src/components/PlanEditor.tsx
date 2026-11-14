@@ -4,20 +4,20 @@ import type {Floor,Point} from '../domain/model';
 import {distance,getBounds,openingMidpoint,pointInPolygon,roomArea,roomPolygon,wallPoints} from '../domain/geometry';
 import {offsetForPoint} from '../domain/openings';
 
-export type DrawTool='select'|'room'|'vertex'|'door'|'window'|'furniture'|'measure';
+export type DrawTool='select'|'room'|'vertex'|'door'|'window'|'furniture'|'measure'|'stairs';
 type Props={
   floor:Floor;tool:DrawTool;
   measurePoints:Point[];onMeasurePoint:(point:Point)=>void;
-  selectedRoom:string|null;selectedWall:string|null;selectedOpening:string|null;selectedFurniture:string|null;
-  onSelectRoom:(id:string|null)=>void;onSelectWall:(id:string|null)=>void;onSelectOpening:(id:string|null)=>void;onSelectFurniture:(id:string|null)=>void;
+  selectedRoom:string|null;selectedWall:string|null;selectedOpening:string|null;selectedFurniture:string|null;selectedStair:string|null;
+  onSelectRoom:(id:string|null)=>void;onSelectWall:(id:string|null)=>void;onSelectOpening:(id:string|null)=>void;onSelectFurniture:(id:string|null)=>void;onSelectStair:(id:string|null)=>void;
   onAddRoom:(a:Point,b:Point)=>void;onMoveVertex:(id:string,p:Point)=>void;
   onAddOpening:(kind:'door'|'window',wallId:string,offset:number)=>void;
   onMoveOpening:(id:string,offset:number)=>void;
-  onAddFurniture:(point:Point)=>void;onMoveFurniture:(id:string,point:Point)=>void;
+  onAddStair:(point:Point)=>void;onAddFurniture:(point:Point)=>void;onMoveFurniture:(id:string,point:Point)=>void;
 };
 type Drag={kind:'room'|'vertex'|'opening'|'furniture';start:Point;current:Point;id?:string;grab?:Point};
-export function PlanEditor({floor,tool,measurePoints,onMeasurePoint,selectedRoom,selectedWall,selectedOpening,selectedFurniture,
-  onSelectRoom,onSelectWall,onSelectOpening,onSelectFurniture,onAddRoom,onMoveVertex,onAddOpening,onMoveOpening,onAddFurniture,onMoveFurniture}:Props){
+export function PlanEditor({floor,tool,measurePoints,onMeasurePoint,selectedRoom,selectedWall,selectedOpening,selectedFurniture,selectedStair,
+  onSelectRoom,onSelectWall,onSelectOpening,onSelectFurniture,onSelectStair,onAddRoom,onMoveVertex,onAddOpening,onMoveOpening,onAddStair,onAddFurniture,onMoveFurniture}:Props){
   const svgRef=useRef<SVGSVGElement>(null),[drag,setDrag]=useState<Drag|null>(null);
   const bounds=getBounds(floor),width=Math.max(8,bounds.maxX-bounds.minX),height=Math.max(6,bounds.maxY-bounds.minY);
   const viewBox=[bounds.minX,bounds.minY,width,height].join(' ');
@@ -30,6 +30,9 @@ export function PlanEditor({floor,tool,measurePoints,onMeasurePoint,selectedRoom
   const onDown=(e:PointerEvent<SVGSVGElement>)=>{
     if(e.button!==0 && e.pointerType==='mouse')return;
     const p=toWorld(e),el=e.target as Element;
+    if(tool==='stairs'){onAddStair(p);return;}
+    const stairId=el.closest('[data-stair-id]')?.getAttribute('data-stair-id');
+    if(tool==='select'&&stairId){onSelectStair(stairId);return;}
     if(tool==='measure'){onMeasurePoint(p);return;}
     if(tool==='room'){
       setDrag({kind:'room',start:p,current:p});e.currentTarget.setPointerCapture(e.pointerId);return;
@@ -128,6 +131,14 @@ export function PlanEditor({floor,tool,measurePoints,onMeasurePoint,selectedRoom
       <circle cx={measurePoints[1].x} cy={measurePoints[1].y} r=".1" fill="#b82b74"/>
     </g>}
     {measurePoints.length===1&&<circle pointerEvents="none" cx={measurePoints[0].x} cy={measurePoints[0].y} r=".1" fill="#b82b74"/>}
+    {(floor.stairs??[]).map(stair=><g key={stair.id} data-stair-id={stair.id}
+      transform={`rotate(${stair.rotation} ${stair.x+stair.width/2} ${stair.y+stair.run/2})`}>
+      <rect x={stair.x} y={stair.y} width={stair.width} height={stair.run} fill="#d8d4c8"
+        stroke={selectedStair===stair.id?'#df266b':'#756e61'} strokeWidth=".05"/>
+      {Array.from({length:12},(_,i)=><line key={i} x1={stair.x} x2={stair.x+stair.width}
+        y1={stair.y+(i+1)*stair.run/13} y2={stair.y+(i+1)*stair.run/13} stroke="#756e61" strokeWidth=".02" pointerEvents="none"/>)}
+      <text x={stair.x+stair.width/2} y={stair.y+stair.run/2} fontSize=".16" textAnchor="middle" fill="#473f35" pointerEvents="none">階段 ↑</text>
+    </g>)}
     {floor.furniture.map(f=><g key={f.id} data-furniture-id={f.id} transform={`rotate(${f.rotation} ${f.x+f.width/2} ${f.y+f.depth/2})`}>
       <rect x={f.x} y={f.y} width={f.width} height={f.depth} rx=".05" stroke={selectedFurniture===f.id?"#df266b":"#9d875c"} strokeWidth={selectedFurniture===f.id?".07":".025"} fill="#f4dba8"/>
       <text x={f.x+f.width/2} y={f.y+f.depth/2} fill="#685534" textAnchor="middle" fontSize=".15" pointerEvents="none">{f.name}</text>

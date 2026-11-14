@@ -15,7 +15,8 @@
 - [x] Parametric lightweight 3D furniture primitives (sofa, bed, dining, chair, storage, kitchen, appliances)
 - [ ] GLB/GLTF furniture loading
 - [x] Multi-floor project editing, independent floor selection and per-floor 2D/3D view
-- [ ] Stairs and navigation between floors
+- [x] Stair placement, 2D tread symbols, editable dimensions and linked floor switch
+- [ ] Continuous first-person ascent/descent, slab openings and stairwell collision
 - [ ] Real floorplan sample and trace/calibration workflow
 - [ ] Mobile usability, performance, regression/screenshot tests
 - [ ] Schema migrations and robust diff/conflict UI
