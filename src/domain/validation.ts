@@ -1,5 +1,6 @@
 import type {Floor,HouseProject,Point} from './model';
 import {distance,polygonArea,roomPolygon,wallPoints} from './geometry';
+import {furnitureClearances} from './clearance';
 export type Issue={severity:'error'|'warning';message:string;itemId?:string};
 const EPS=1e-7;
 const orient=(a:Point,b:Point,c:Point)=>(b.x-a.x)*(c.y-a.y)-(b.y-a.y)*(c.x-a.x);
@@ -109,6 +110,13 @@ export function validateFloor(floor:Floor):Issue[]{
   for(const f of floor.furniture){
     if(![f.x,f.y,f.width,f.depth,f.height,f.rotation].every(Number.isFinite)||f.width<=0||f.depth<=0||f.height<=0)
       issues.push({severity:'error',itemId:f.id,message:'家具の寸法が不正'});
+  }
+  for(const item of furnitureClearances(floor)){
+    // Furniture pairs are reported once. Soft warnings do not prevent experimenting or JSON saves.
+    if(!item.overlap)continue;
+    if(item.kind==='furniture'&&item.furnitureId>item.otherId)continue;
+    issues.push({severity:'warning',itemId:item.furnitureId,
+      message:item.kind==='wall'?'家具が壁と干渉しています':'家具同士が干渉しています'});
   }
   return issues;
 }

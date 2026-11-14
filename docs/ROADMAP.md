@@ -11,6 +11,8 @@
 - [x] Initial first-person walk mode with swept 2D wall/closed-door/window/furniture collision, keyboard and touch controls
 - [ ] Stair and multi-floor navigation, richer physical collisions and automated browser tests
 - [x] Basic furniture catalog, 2D placement/drag, numeric size and rotation, deletion
+- [x] Furniture–wall and furniture–furniture top-down interference checks, conservative two-point route clearance estimate
+- [x] Parametric lightweight 3D furniture primitives (sofa, bed, dining, chair, storage, kitchen, appliances)
 - [ ] GLB/GLTF furniture loading
 - [ ] Multi-floor editor and navigation
 - [ ] Real floorplan sample and trace/calibration workflow

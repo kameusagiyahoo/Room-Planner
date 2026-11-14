@@ -4,9 +4,10 @@ import type {Floor,Point} from '../domain/model';
 import {distance,getBounds,openingMidpoint,pointInPolygon,roomArea,roomPolygon,wallPoints} from '../domain/geometry';
 import {offsetForPoint} from '../domain/openings';
 
-export type DrawTool='select'|'room'|'vertex'|'door'|'window'|'furniture';
+export type DrawTool='select'|'room'|'vertex'|'door'|'window'|'furniture'|'measure';
 type Props={
   floor:Floor;tool:DrawTool;
+  measurePoints:Point[];onMeasurePoint:(point:Point)=>void;
   selectedRoom:string|null;selectedWall:string|null;selectedOpening:string|null;selectedFurniture:string|null;
   onSelectRoom:(id:string|null)=>void;onSelectWall:(id:string|null)=>void;onSelectOpening:(id:string|null)=>void;onSelectFurniture:(id:string|null)=>void;
   onAddRoom:(a:Point,b:Point)=>void;onMoveVertex:(id:string,p:Point)=>void;
@@ -15,7 +16,7 @@ type Props={
   onAddFurniture:(point:Point)=>void;onMoveFurniture:(id:string,point:Point)=>void;
 };
 type Drag={kind:'room'|'vertex'|'opening'|'furniture';start:Point;current:Point;id?:string};
-export function PlanEditor({floor,tool,selectedRoom,selectedWall,selectedOpening,selectedFurniture,
+export function PlanEditor({floor,tool,measurePoints,onMeasurePoint,selectedRoom,selectedWall,selectedOpening,selectedFurniture,
   onSelectRoom,onSelectWall,onSelectOpening,onSelectFurniture,onAddRoom,onMoveVertex,onAddOpening,onMoveOpening,onAddFurniture,onMoveFurniture}:Props){
   const svgRef=useRef<SVGSVGElement>(null),[drag,setDrag]=useState<Drag|null>(null);
   const bounds=getBounds(floor),width=Math.max(8,bounds.maxX-bounds.minX),height=Math.max(6,bounds.maxY-bounds.minY);
@@ -29,6 +30,7 @@ export function PlanEditor({floor,tool,selectedRoom,selectedWall,selectedOpening
   const onDown=(e:PointerEvent<SVGSVGElement>)=>{
     if(e.button!==0 && e.pointerType==='mouse')return;
     const p=toWorld(e),el=e.target as Element;
+    if(tool==='measure'){onMeasurePoint(p);return;}
     if(tool==='room'){
       setDrag({kind:'room',start:p,current:p});e.currentTarget.setPointerCapture(e.pointerId);return;
     }
@@ -117,6 +119,12 @@ export function PlanEditor({floor,tool,selectedRoom,selectedWall,selectedOpening
         <circle cx={center.x} cy={center.y} r=".16" fill="transparent" stroke="transparent" strokeWidth=".1"/>
       </g>;
     })}
+    {measurePoints.length===2&&<g pointerEvents="none">
+      <line x1={measurePoints[0].x} y1={measurePoints[0].y} x2={measurePoints[1].x} y2={measurePoints[1].y}
+        stroke="#b82b74" strokeWidth=".055" strokeDasharray=".2,.07"/>
+      <circle cx={measurePoints[1].x} cy={measurePoints[1].y} r=".1" fill="#b82b74"/>
+    </g>}
+    {measurePoints.length===1&&<circle pointerEvents="none" cx={measurePoints[0].x} cy={measurePoints[0].y} r=".1" fill="#b82b74"/>}
     {floor.furniture.map(f=><g key={f.id} data-furniture-id={f.id} transform={`rotate(${f.rotation} ${f.x+f.width/2} ${f.y+f.depth/2})`}>
       <rect x={f.x} y={f.y} width={f.width} height={f.depth} rx=".05" stroke={selectedFurniture===f.id?"#df266b":"#9d875c"} strokeWidth={selectedFurniture===f.id?".07":".025"} fill="#f4dba8"/>
       <text x={f.x+f.width/2} y={f.y+f.depth/2} fill="#685534" textAnchor="middle" fontSize=".15" pointerEvents="none">{f.name}</text>

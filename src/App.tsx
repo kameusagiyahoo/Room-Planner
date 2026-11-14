@@ -9,6 +9,7 @@ import { roomArea, roundGrid, distance, wallPoints } from './domain/geometry';
 import { insertRectangle } from './domain/topology';
 import { addOpening, moveOpening } from './domain/openings';
 import {PRESETS,addFurniture,changeFurniture} from './domain/furniture';
+import {nearestFurnitureClearance,furnitureClearances,minimumPassageDiameter} from './domain/clearance';
 import { validateProject } from './domain/validation';
 import { loadDraft, saveDraft } from './storage/local';
 import { loadRemote, saveRemote } from './storage/github';
@@ -33,6 +34,7 @@ export default function App(){
   const [selectedOpening,setSelectedOpening]=useState<string|null>(null);
   const [selectedFurniture,setSelectedFurniture]=useState<string|null>(null);
   const [preset,setPreset]=useState<string>('sofa');
+  const [measurePoints,setMeasurePoints]=useState<Point[]>([]);
   const [status,setStatus]=useState('サンプルを読み込みました');
   const [draftStatus,setDraftStatus]=useState<'保存中'|'一時保存済み'|'未保存'>('未保存');
   const [target,setTarget]=useState<GitHubTarget>({owner:'kameusagiyahoo',repo:'Room-Planner-Data',branch:'main',token:''});
@@ -48,6 +50,11 @@ export default function App(){
   const activeWall=floor.walls.find(w=>w.id===selectedWall);
   const activeOpening=floor.openings.find(o=>o.id===selectedOpening);
   const activeFurniture=floor.furniture.find(f=>f.id===selectedFurniture);
+  const nearestGap=activeFurniture?nearestFurnitureClearance(floor,activeFurniture.id):null;
+  const collisionWarnings=furnitureClearances(floor).filter(item=>item.overlap);
+  const measureDistance=measurePoints.length===2?distance(measurePoints[0],measurePoints[1]):null;
+  const minimumDiameter=measurePoints.length===2?minimumPassageDiameter(floor,measurePoints[0],measurePoints[1]):null;
+  const addMeasurePoint=(point:Point)=>setMeasurePoints(prev=>prev.length>=2?[point]:[...prev,point]);
   const selectRoom=(id:string|null)=>{setSelectedRoom(id);setSelectedWall(null);setSelectedOpening(null);};
   const selectWall=(id:string|null)=>{setSelectedWall(id);setSelectedRoom(null);setSelectedOpening(null);};
   const selectOpening=(id:string|null)=>{setSelectedOpening(id);setSelectedWall(null);setSelectedRoom(null);};
@@ -139,7 +146,8 @@ export default function App(){
     try{
       const parsed:unknown=JSON.parse(await file.text());
       const issues=validateProject(parsed);
-      if(issues.length)throw Error('不正なファイル: '+issues[0].message);
+      const errors=issues.filter(i=>i.severity==='error');
+      if(errors.length)throw Error('不正なファイル: '+errors[0].message);
       const next=parsed as HouseProject;
       replace(next,'JSONを読み込みました');
       setRemoteId(next.id);setRemoteMeta(null);selectRoom(null);
@@ -166,7 +174,8 @@ export default function App(){
       const file=await loadRemote(target,remoteId);
       if(!file)throw Error('対象のプロジェクトが見つかりません');
       const issues=validateProject(file.project);
-      if(issues.length)throw Error('遠隔JSONの検証に失敗: '+issues[0].message);
+      const errors=issues.filter(i=>i.severity==='error');
+      if(errors.length)throw Error('遠隔JSONの検証に失敗: '+errors[0].message);
       replace(file.project,'GitHubから読み込みました');
       setRemoteMeta({key:remoteKey(target,remoteId),sha:file.sha});
       selectRoom(null);
@@ -203,13 +212,27 @@ export default function App(){
             <button aria-pressed={tool==='door'} onClick={()=>{setTool('door');setView('2d');}}>ドア</button>
             <button aria-pressed={tool==='window'} onClick={()=>{setTool('window');setView('2d');}}>窓</button>
             <button aria-pressed={tool==='furniture'} onClick={()=>{setTool('furniture');setView('2d');}}>家具追加</button>
+            <button aria-pressed={tool==='measure'} onClick={()=>{setTool('measure');setView('2d');setMeasurePoints([]);}}>通路計測</button>
           </div>
-          <small>{tool==='room'?'間取りの上でドラッグして矩形部屋を追加':tool==='vertex'?'黄色い頂点をドラッグ（共有壁も連動）':tool==='door'?'壁をクリックしてドアを配置':tool==='window'?'壁をクリックして窓を配置':tool==='furniture'?'家具を選び、図面をタップして配置':'部屋・壁・ドア・窓を選択。開口部はドラッグで移動できます'}</small>
+          <small>{tool==='room'?'間取りの上でドラッグして矩形部屋を追加':tool==='vertex'?'黄色い頂点をドラッグ（共有壁も連動）':tool==='door'?'壁をクリックしてドアを配置':tool==='window'?'壁をクリックして窓を配置':tool==='furniture'?'家具を選び、図面をタップして配置':tool==='measure'?'計測したい経路上の2点を順番にタップ':'部屋・壁・ドア・窓を選択。開口部はドラッグで移動できます'}</small>
+          {tool==='measure'&&<div className="inspector">
+            <h3>通路の幅を概算</h3>
+            {measureDistance===null?<small>図面の2点をタップして経路を指定します。</small>:<>
+              <div>経路長：<strong>{measureDistance.toFixed(2)} m</strong></div>
+              <div>最小自由円直径：<strong>{minimumDiameter?.toFixed(2)} m</strong></div>
+              <small>経路上0.1m間隔の点で、壁・窓・閉扉・家具に接しない円の直径を計算した保守的な指標。正式な廊下有効幅ではありません。</small>
+              <button onClick={()=>setMeasurePoints([])}>計測点をリセット</button>
+            </>}
+          </div>}
           {tool==='furniture'&&<label>家具の種類<select value={preset} onChange={e=>setPreset(e.target.value)}>
             {PRESETS.map(p=><option key={p.kind} value={p.kind}>{p.name} ({p.width}×{p.depth}m)</option>)}
           </select></label>}
           {activeFurniture&&<div className="inspector">
             <h3>家具の編集</h3>
+            <div className={nearestGap?.overlap?'error':'ok'}>
+              {nearestGap?nearestGap.overlap?'壁・家具に接触または干渉あり':'最小周囲すき間 '+nearestGap.gap.toFixed(2)+' m':'近くに比較対象なし'}
+            </div>
+            {nearestGap&&!nearestGap.overlap&&nearestGap.gap<0.7&&<small>すき間0.7m未満。通行・家具の引き出し動作を確認してください。</small>}
             <label>名前<input value={activeFurniture.name} onChange={e=>updateFurniture(activeFurniture.id,{name:e.target.value})}/></label>
             {(['x','y','width','depth','height','rotation'] as const).map(field=><label key={field}>
               {({x:'X (m)',y:'Y (m)',width:'幅 (m)',depth:'奥行 (m)',height:'高さ (m)',rotation:'回転 (度)'})[field]}
@@ -264,13 +287,17 @@ export default function App(){
       </aside>
       <main className={'workspace '+view}>
         {view!=='3d'&&<section className="view-pane"><h2>2D間取り <span>1mグリッド / SVG</span></h2>
-          <div className="view-body"><PlanEditor floor={floor} tool={tool} selectedRoom={selectedRoom} selectedWall={selectedWall} selectedOpening={selectedOpening} selectedFurniture={selectedFurniture}
+          <div className="view-body"><PlanEditor floor={floor} tool={tool} measurePoints={measurePoints} onMeasurePoint={addMeasurePoint} selectedRoom={selectedRoom} selectedWall={selectedWall} selectedOpening={selectedOpening} selectedFurniture={selectedFurniture}
           onSelectRoom={selectRoom} onSelectWall={selectWall} onSelectOpening={selectOpening} onSelectFurniture={selectFurniture}
           onAddRoom={addRoom} onMoveVertex={moveVertex} onAddOpening={addDoorOrWindow} onMoveOpening={repositionOpening} onAddFurniture={place} onMoveFurniture={moveFurniture}/></div></section>}
         {view!=='2d'&&<section className="view-pane"><h2>3D表示 <span>俯瞰 / 衝突判定付き歩行</span></h2>
           <div className="view-body"><Viewer3D floor={floor}/></div></section>}
       </main>
       <aside className="right-pane">
+        <section className="panel"><h2>家具干渉診断</h2>
+          <div className={collisionWarnings.length?'error':'ok'}>{collisionWarnings.length?'干渉・接触 '+collisionWarnings.length+' 箇所（家具方向別の件数）':'検出された干渉なし'}</div>
+          <small>家具と壁、家具同士の平面形状を比較。高さ方向の詳細判定は未対応。</small>
+        </section>
         <section className="panel"><h2>整合性チェック</h2>
           <strong className={hasErrors?'error':'ok'}>{hasErrors?'エラーあり':'基本検証OK'}</strong>
           <div className="issue-list">{issues.length?issues.map((issue,i)=><p key={i} className="error">{issue.message} {issue.itemId||''}</p>):<small>壁参照・部屋の閉合・開口位置・寸法をチェックしました</small>}</div>
