@@ -8,7 +8,8 @@
 - [x] IndexedDB draft and GitHub Contents API explicit save/load
 - [x] Geometric edge splitting and T-junction topology for rectangular room insertion; initial consistency tests
 - [ ] Full door/window catalog and animations (basic door/window selection, drag, and parametric inspector implemented)
-- [ ] Camera walk mode with reliable collision and stair constraints
+- [x] Initial first-person walk mode with swept 2D wall/closed-door/window/furniture collision, keyboard and touch controls
+- [ ] Stair and multi-floor navigation, richer physical collisions and automated browser tests
 - [ ] Asset catalog and GLB/GLTF furniture loading
 - [ ] Multi-floor editor and navigation
 - [ ] Real floorplan sample and trace/calibration workflow

@@ -233,7 +233,7 @@ export default function App(){
           <div className="view-body"><PlanEditor floor={floor} tool={tool} selectedRoom={selectedRoom} selectedWall={selectedWall} selectedOpening={selectedOpening}
           onSelectRoom={selectRoom} onSelectWall={selectWall} onSelectOpening={selectOpening}
           onAddRoom={addRoom} onMoveVertex={moveVertex} onAddOpening={addDoorOrWindow} onMoveOpening={repositionOpening}/></div></section>}
-        {view!=='2d'&&<section className="view-pane"><h2>3D俯瞰 <span>ドラッグ: 回転 / スクロール: 拡大</span></h2>
+        {view!=='2d'&&<section className="view-pane"><h2>3D表示 <span>俯瞰 / 衝突判定付き歩行</span></h2>
           <div className="view-body"><Viewer3D floor={floor}/></div></section>}
       </main>
       <aside className="right-pane">
@@ -243,7 +243,7 @@ export default function App(){
         </section>
         <section className="panel"><h2>実装状況</h2>
           <p>利用可能：矩形部屋、頂点ドラッグ、面積、2D/3D、JSON入出力、GitHub手動保存</p>
-          <p>今後：家具カタログ、階段、3D歩行・衝突判定。ドア・窓の編集は基本機能を実装</p>
+          <p>今後：家具カタログ、階段・複数階、歩行の改良。現在：基本的な3D歩行と壁・ドア・窓・家具の衝突判定</p>
         </section>
       </aside>
     </div>
