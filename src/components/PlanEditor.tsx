@@ -1,5 +1,7 @@
 import {useEffect,useRef,useState} from 'react';
 import {initialView,panView,pixelScale,zoomView} from '../domain/viewport';
+import {SNAP_STEPS,snapLabel,snapPoint} from '../domain/snap';
+import type {SnapStep} from '../domain/snap';
 import type {PointerEvent} from 'react';
 import type {Floor,Point} from '../domain/model';
 import {distance,getBounds,openingMidpoint,pointInPolygon,roomArea,roomPolygon,wallPoints} from '../domain/geometry';
@@ -7,19 +9,19 @@ import {offsetForPoint} from '../domain/openings';
 
 export type DrawTool='select'|'room'|'vertex'|'door'|'window'|'furniture'|'measure'|'stairs';
 type Props={
-  floor:Floor;tool:DrawTool;
+  floor:Floor;tool:DrawTool;snapStep:SnapStep;onSnapChange:(step:SnapStep)=>void;
   measurePoints:Point[];onMeasurePoint:(point:Point)=>void;
-  selectedRoom:string|null;selectedWall:string|null;selectedOpening:string|null;selectedFurniture:string|null;selectedStair:string|null;
-  onSelectRoom:(id:string|null)=>void;onSelectWall:(id:string|null)=>void;onSelectOpening:(id:string|null)=>void;onSelectFurniture:(id:string|null)=>void;onSelectStair:(id:string|null)=>void;
+  selectedRoom:string|null;selectedWall:string|null;selectedOpening:string|null;selectedFurniture:string|null;selectedStair:string|null;selectedVertex:string|null;
+  onSelectRoom:(id:string|null)=>void;onSelectWall:(id:string|null)=>void;onSelectOpening:(id:string|null)=>void;onSelectFurniture:(id:string|null)=>void;onSelectStair:(id:string|null)=>void;onSelectVertex:(id:string|null)=>void;
   onAddRoom:(a:Point,b:Point)=>void;onMoveVertex:(id:string,p:Point)=>void;
   onAddOpening:(kind:'door'|'window',wallId:string,offset:number)=>void;
   onMoveOpening:(id:string,offset:number)=>void;
-  onAddStair:(point:Point)=>void;onAddFurniture:(point:Point)=>void;onMoveFurniture:(id:string,point:Point)=>void;
+  onAddStair:(point:Point)=>void;onMoveStair:(id:string,point:Point)=>void;onAddFurniture:(point:Point)=>void;onMoveFurniture:(id:string,point:Point)=>void;
 };
-type Drag={kind:'room'|'vertex'|'opening'|'furniture'|'tap'|'pan';start:Point;current:Point;id?:string;grab?:Point;action?:DrawTool;screen?:Point};
+type Drag={kind:'room'|'vertex'|'opening'|'furniture'|'stair'|'tap'|'pan';start:Point;current:Point;id?:string;grab?:Point;action?:DrawTool;screen?:Point};
 type Gesture={distance:number;center:Point};
-export function PlanEditor({floor,tool,measurePoints,onMeasurePoint,selectedRoom,selectedWall,selectedOpening,selectedFurniture,selectedStair,
-  onSelectRoom,onSelectWall,onSelectOpening,onSelectFurniture,onSelectStair,onAddRoom,onMoveVertex,onAddOpening,onMoveOpening,onAddStair,onAddFurniture,onMoveFurniture}:Props){
+export function PlanEditor({floor,tool,snapStep,onSnapChange,measurePoints,onMeasurePoint,selectedRoom,selectedWall,selectedOpening,selectedFurniture,selectedStair,selectedVertex,
+  onSelectRoom,onSelectWall,onSelectOpening,onSelectFurniture,onSelectStair,onSelectVertex,onAddRoom,onMoveVertex,onAddOpening,onMoveOpening,onAddStair,onMoveStair,onAddFurniture,onMoveFurniture}:Props){
   const svgRef=useRef<SVGSVGElement>(null),[drag,setDrag]=useState<Drag|null>(null);
   const [viewport,setViewport]=useState(initialView);
   const activePointers=useRef(new Map<number,Point>());
@@ -40,6 +42,10 @@ export function PlanEditor({floor,tool,measurePoints,onMeasurePoint,selectedRoom
     const matrix=svg.getScreenCTM();const converted=matrix?pt.matrixTransform(matrix.inverse()):pt;
     return {x:converted.x,y:converted.y};
   };
+  const targetPosition=(d:Drag):Point=>{
+    const grab=d.grab??{x:0,y:0};
+    return snapPoint({x:d.current.x-grab.x,y:d.current.y-grab.y},snapStep);
+  };
   const onDown=(e:PointerEvent<SVGSVGElement>)=>{
     if(e.button!==0 && e.pointerType==='mouse')return;
     if(e.pointerType==='touch'){
@@ -58,14 +64,20 @@ export function PlanEditor({floor,tool,measurePoints,onMeasurePoint,selectedRoom
     const p=toWorld(e),el=e.target as Element;
     if(tool==='stairs'){setDrag({kind:'tap',start:p,current:p,action:'stairs'});return;}
     const stairId=el.closest('[data-stair-id]')?.getAttribute('data-stair-id');
-    if(tool==='select'&&stairId){onSelectStair(stairId);return;}
+    if(tool==='select'&&stairId){
+      onSelectStair(stairId);
+      const stair=(floor.stairs??[]).find(s=>s.id===stairId);
+      setDrag({kind:'stair',id:stairId,start:p,current:p,
+        grab:stair?{x:p.x-stair.x,y:p.y-stair.y}:undefined});
+      e.currentTarget.setPointerCapture(e.pointerId);return;
+    }
     if(tool==='measure'){setDrag({kind:'tap',start:p,current:p,action:'measure'});return;}
     if(tool==='room'){
       setDrag({kind:'room',start:p,current:p});e.currentTarget.setPointerCapture(e.pointerId);return;
     }
     if(tool==='vertex'){
       const id=el.closest('[data-vertex]')?.getAttribute('data-vertex');
-      if(id){setDrag({kind:'vertex',id,start:p,current:p});e.currentTarget.setPointerCapture(e.pointerId);}
+      if(id){onSelectVertex(id);setDrag({kind:'vertex',id,start:p,current:p});e.currentTarget.setPointerCapture(e.pointerId);}
       return;
     }
     if(tool==='furniture'){setDrag({kind:'tap',start:p,current:p,action:'furniture'});return;}
@@ -140,11 +152,14 @@ export function PlanEditor({floor,tool,measurePoints,onMeasurePoint,selectedRoom
         if(wall)onAddOpening(drag.action,wall.id,offsetForPoint(floor,wall,drag.start));
       }
     }
-    if(drag.kind==='room'&&distance(drag.start,p)>0.7)onAddRoom(drag.start,p);
-    if(drag.kind==='vertex'&&drag.id&&distance(drag.start,p)>0.03)onMoveVertex(drag.id,p);
+    if(drag.kind==='room'&&distance(drag.start,p)>0.7)onAddRoom(snapPoint(drag.start,snapStep),snapPoint(p,snapStep));
+    if(drag.kind==='vertex'&&drag.id&&distance(drag.start,p)>0.03)onMoveVertex(drag.id,snapPoint(p,snapStep));
     if(drag.kind==='furniture'&&drag.id&&distance(drag.start,p)>0.03){
       const f=floor.furniture.find(f=>f.id===drag.id);
-      if(f)onMoveFurniture(drag.id,{x:p.x-(drag.grab?.x??f.width/2),y:p.y-(drag.grab?.y??f.depth/2)});
+      if(f)onMoveFurniture(drag.id,targetPosition({...drag,current:p}));
+    }
+    if(drag.kind==='stair'&&drag.id&&distance(drag.start,p)>0.03){
+      onMoveStair(drag.id,targetPosition({...drag,current:p}));
     }
     if(drag.kind==='opening'&&drag.id&&distance(drag.start,p)>0.03){
       const opening=floor.openings.find(o=>o.id===drag.id),wall=opening&&floor.walls.find(w=>w.id===opening.wallId);
@@ -162,6 +177,11 @@ export function PlanEditor({floor,tool,measurePoints,onMeasurePoint,selectedRoom
     if(activePointers.current.size===0)pinching.current=false;
     setDrag(null);
   };
+  const roomStart=drag?.kind==='room'?snapPoint(drag.start,snapStep):null;
+  const roomEnd=drag?.kind==='room'?snapPoint(drag.current,snapStep):null;
+  const movedFurniture=drag?.kind==='furniture'?floor.furniture.find(f=>f.id===drag.id):null;
+  const movedStair=drag?.kind==='stair'?(floor.stairs??[]).find(s=>s.id===drag.id):null;
+  const proposed=drag&&(drag.kind==='furniture'||drag.kind==='stair')?targetPosition(drag):null;
   const lines=[];
   for(let x=Math.floor(bounds.minX+viewport.panX-1);x<=Math.ceil(bounds.minX+viewport.panX+viewWidth+1);x++)lines.push(<line key={'x'+x} x1={x} y1={bounds.minY+viewport.panY-1} x2={x} y2={bounds.minY+viewport.panY+viewHeight+1} stroke="#dce4ed" strokeWidth=".015"/>);
   for(let y=Math.floor(bounds.minY+viewport.panY-1);y<=Math.ceil(bounds.minY+viewport.panY+viewHeight+1);y++)lines.push(<line key={'y'+y} x1={bounds.minX+viewport.panX-1} y1={y} x2={bounds.minX+viewport.panX+viewWidth+1} y2={y} stroke="#dce4ed" strokeWidth=".015"/>);
@@ -222,12 +242,39 @@ export function PlanEditor({floor,tool,measurePoints,onMeasurePoint,selectedRoom
       <rect x={f.x} y={f.y} width={f.width} height={f.depth} rx=".05" stroke={selectedFurniture===f.id?"#df266b":"#9d875c"} strokeWidth={selectedFurniture===f.id?".07":".025"} fill="#f4dba8"/>
       <text x={f.x+f.width/2} y={f.y+f.depth/2} fill="#685534" textAnchor="middle" fontSize=".15" pointerEvents="none">{f.name}</text>
     </g>)}
-    {tool==='vertex'&&floor.vertices.map(v=><circle key={v.id} data-vertex={v.id} cx={v.x} cy={v.y} r=".12" fill="#f9a825" stroke="#fff" strokeWidth=".035"/>)}
-    {drag?.kind==='room'&&<rect x={Math.min(drag.start.x,drag.current.x)} y={Math.min(drag.start.y,drag.current.y)}
-      width={Math.abs(drag.start.x-drag.current.x)} height={Math.abs(drag.start.y-drag.current.y)}
-      fill="#63aadb" fillOpacity=".2" stroke="#2375a4" strokeWidth=".04" strokeDasharray=".16,.09"/>}
-    {drag?.kind==='vertex'&&<circle cx={drag.current.x} cy={drag.current.y} r=".14" fill="#ed6c3d"/>}
+    {tool==='vertex'&&floor.vertices.map(v=><circle key={v.id} data-vertex={v.id} cx={v.x} cy={v.y}
+      r={selectedVertex===v.id?".18":".15"} fill={selectedVertex===v.id?"#e15d46":"#f9a825"} stroke="#fff" strokeWidth=".035"/>)}
+    {roomStart&&roomEnd&&<g pointerEvents="none">
+      <rect x={Math.min(roomStart.x,roomEnd.x)} y={Math.min(roomStart.y,roomEnd.y)}
+        width={Math.abs(roomStart.x-roomEnd.x)} height={Math.abs(roomStart.y-roomEnd.y)}
+        fill="#63aadb" fillOpacity=".2" stroke="#2375a4" strokeWidth=".04" strokeDasharray=".16,.09"/>
+      <text x={(roomStart.x+roomEnd.x)/2} y={(roomStart.y+roomEnd.y)/2} fontSize=".24" fill="#155985"
+        textAnchor="middle">{Math.abs(roomStart.x-roomEnd.x).toFixed(2)} × {Math.abs(roomStart.y-roomEnd.y).toFixed(2)} m</text>
+    </g>}
+    {drag?.kind==='vertex'&&<g pointerEvents="none">
+      <circle cx={snapPoint(drag.current,snapStep).x} cy={snapPoint(drag.current,snapStep).y}
+        r=".15" fill="#ed6c3d" stroke="white" strokeWidth=".03"/>
+      <text x={snapPoint(drag.current,snapStep).x+.18} y={snapPoint(drag.current,snapStep).y-.18}
+        fill="#ad3c2e" fontSize=".2">{snapPoint(drag.current,snapStep).x.toFixed(2)}, {snapPoint(drag.current,snapStep).y.toFixed(2)}</text>
+    </g>}
+    {movedFurniture&&proposed&&<g pointerEvents="none" transform={`rotate(${movedFurniture.rotation} ${proposed.x+movedFurniture.width/2} ${proposed.y+movedFurniture.depth/2})`}>
+      <rect x={proposed.x} y={proposed.y} width={movedFurniture.width} height={movedFurniture.depth}
+        rx=".05" fill="#32a9ca" fillOpacity=".25" stroke="#0c80b0" strokeWidth=".055" strokeDasharray=".13,.08"/>
+    </g>}
+    {movedStair&&proposed&&<g pointerEvents="none" transform={`rotate(${movedStair.rotation} ${proposed.x+movedStair.width/2} ${proposed.y+movedStair.run/2})`}>
+      <rect x={proposed.x} y={proposed.y} width={movedStair.width} height={movedStair.run}
+        fill="#32a9ca" fillOpacity=".25" stroke="#0c80b0" strokeWidth=".055" strokeDasharray=".13,.08"/>
+    </g>}
+    {proposed&&<g pointerEvents="none">
+      <text x={proposed.x} y={proposed.y-.16} fontSize=".2" fill="#0c80b0">
+        {proposed.x.toFixed(2)}, {proposed.y.toFixed(2)} m
+      </text>
+    </g>}
   </svg>
+    <button type="button" className="plan-snap-chip" aria-label={'グリッド吸着: '+snapLabel(snapStep)}
+      onClick={()=>onSnapChange(SNAP_STEPS[(SNAP_STEPS.indexOf(snapStep)+1)%SNAP_STEPS.length])}>
+      {snapLabel(snapStep)} <span aria-hidden="true">⌄</span>
+    </button>
     <div className="plan-zoom" aria-label="表示倍率">
       <button onClick={()=>zoom(1.3)} aria-label="拡大">＋</button>
       <button onClick={()=>setViewport(initialView)} aria-label="全体表示">全体</button>
