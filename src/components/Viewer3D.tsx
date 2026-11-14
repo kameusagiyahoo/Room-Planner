@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import type { Floor } from '../domain/model';
+import {addFurnitureModels} from '../viewer3d/furnitureMeshes';
 import { distance, getBounds, roomPolygon, wallPoints } from '../domain/geometry';
 import {makeCollisionWorld,movePlayer,blocked,PLAYER_RADIUS} from '../domain/collision';
 type Props={floor:Floor};
@@ -74,7 +75,7 @@ export function Viewer3D({floor}:Props){
     const wallMaterial=new THREE.MeshStandardMaterial({color:0x9eaab8});
     const windowMaterial=new THREE.MeshStandardMaterial({color:0x5bb6d5,transparent:true,opacity:.35});
     const doorMaterial=new THREE.MeshStandardMaterial({color:0xb98f5a,transparent:true,opacity:.8});
-    const furnitureMaterial=new THREE.MeshStandardMaterial({color:0xd8ae79});
+
     for(const room of floor.rooms){
       const points=roomPolygon(floor,room);if(points.some(p=>!Number.isFinite(p.x)))continue;
       const shape=new THREE.Shape();points.forEach((p,i)=>i?shape.lineTo(p.x,p.y):shape.moveTo(p.x,p.y));shape.closePath();
@@ -109,11 +110,7 @@ export function Viewer3D({floor}:Props){
       }
       if(cursor<L)at((cursor+L)/2,h/2,L-cursor,h,wallMaterial);
     }
-    for(const f of floor.furniture){
-      const mesh=new THREE.Mesh(new THREE.BoxGeometry(f.width,f.height,f.depth),furnitureMaterial);
-      mesh.position.set(f.x+f.width/2,floor.elevation+f.height/2,-(f.y+f.depth/2));
-      mesh.rotation.y=-f.rotation*Math.PI/180;scene.add(mesh);
-    }
+    const disposeFurniture=addFurnitureModels(scene,floor.furniture,floor.elevation);
     const grid=new THREE.GridHelper(Math.max(10,Math.ceil(span)),Math.ceil(span),0xb1c4d5,0xd5e0e8);
     grid.position.set(center.x,floor.elevation-.015,center.z);scene.add(grid);
     const resize=()=>{
@@ -149,8 +146,8 @@ export function Viewer3D({floor}:Props){
       renderer.domElement.removeEventListener('pointerup',up);
       renderer.domElement.removeEventListener('pointercancel',up);scene.traverse(o=>{
       if(o instanceof THREE.Mesh){o.geometry.dispose();}
-    });for(const mat of [floorMaterial,wallMaterial,windowMaterial,doorMaterial,furnitureMaterial])mat.dispose();
-    grid.geometry.dispose();renderer.dispose();node.removeChild(renderer.domElement);};
+    });for(const mat of [floorMaterial,wallMaterial,windowMaterial,doorMaterial])mat.dispose();
+    disposeFurniture();grid.geometry.dispose();renderer.dispose();node.removeChild(renderer.domElement);};
   },[floor,eyeHeight]);
   const toggle=()=>{
     keys.current.clear();touch.current={forward:0,side:0,turn:0};
