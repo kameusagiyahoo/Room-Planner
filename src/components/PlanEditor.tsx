@@ -1,4 +1,5 @@
-import {useRef,useState} from 'react';
+import {useEffect,useRef,useState} from 'react';
+import {initialView,panView,pixelScale,zoomView} from '../domain/viewport';
 import type {PointerEvent} from 'react';
 import type {Floor,Point} from '../domain/model';
 import {distance,getBounds,openingMidpoint,pointInPolygon,roomArea,roomPolygon,wallPoints} from '../domain/geometry';
@@ -15,12 +16,24 @@ type Props={
   onMoveOpening:(id:string,offset:number)=>void;
   onAddStair:(point:Point)=>void;onAddFurniture:(point:Point)=>void;onMoveFurniture:(id:string,point:Point)=>void;
 };
-type Drag={kind:'room'|'vertex'|'opening'|'furniture';start:Point;current:Point;id?:string;grab?:Point};
+type Drag={kind:'room'|'vertex'|'opening'|'furniture'|'tap'|'pan';start:Point;current:Point;id?:string;grab?:Point;action?:DrawTool;screen?:Point};
+type Gesture={distance:number;center:Point};
 export function PlanEditor({floor,tool,measurePoints,onMeasurePoint,selectedRoom,selectedWall,selectedOpening,selectedFurniture,selectedStair,
   onSelectRoom,onSelectWall,onSelectOpening,onSelectFurniture,onSelectStair,onAddRoom,onMoveVertex,onAddOpening,onMoveOpening,onAddStair,onAddFurniture,onMoveFurniture}:Props){
   const svgRef=useRef<SVGSVGElement>(null),[drag,setDrag]=useState<Drag|null>(null);
+  const [viewport,setViewport]=useState(initialView);
+  const activePointers=useRef(new Map<number,Point>());
+  const gesture=useRef<Gesture|null>(null);
+  const pinching=useRef(false);
+  useEffect(()=>{setViewport(initialView);setDrag(null);activePointers.current.clear();gesture.current=null;pinching.current=false;},[floor.id]);
   const bounds=getBounds(floor),width=Math.max(8,bounds.maxX-bounds.minX),height=Math.max(6,bounds.maxY-bounds.minY);
-  const viewBox=[bounds.minX,bounds.minY,width,height].join(' ');
+  const viewWidth=width/viewport.zoom,viewHeight=height/viewport.zoom;
+  const viewBox=[bounds.minX+viewport.panX,bounds.minY+viewport.panY,viewWidth,viewHeight].join(' ');
+  const zoom=(factor:number)=>setViewport(v=>zoomView(v,factor,width,height));
+  const scaleOfSvg=()=>{
+    const box=svgRef.current?.getBoundingClientRect();
+    return box?pixelScale(viewport.zoom,width,height,box.width,box.height):1;
+  };
   const toWorld=(e:PointerEvent<SVGSVGElement>):Point=>{
     const svg=svgRef.current;if(!svg)return {x:0,y:0};
     const pt=svg.createSVGPoint();pt.x=e.clientX;pt.y=e.clientY;
@@ -29,11 +42,24 @@ export function PlanEditor({floor,tool,measurePoints,onMeasurePoint,selectedRoom
   };
   const onDown=(e:PointerEvent<SVGSVGElement>)=>{
     if(e.button!==0 && e.pointerType==='mouse')return;
+    if(e.pointerType==='touch'){
+      activePointers.current.set(e.pointerId,{x:e.clientX,y:e.clientY});
+      e.currentTarget.setPointerCapture(e.pointerId);
+      if(activePointers.current.size>=2){
+        const points=[...activePointers.current.values()];
+        gesture.current={
+          distance:distance(points[0],points[1]),
+          center:{x:(points[0].x+points[1].x)/2,y:(points[0].y+points[1].y)/2}
+        };
+        pinching.current=true;setDrag(null);return;
+      }
+    }
+    if(pinching.current)return;
     const p=toWorld(e),el=e.target as Element;
-    if(tool==='stairs'){onAddStair(p);return;}
+    if(tool==='stairs'){setDrag({kind:'tap',start:p,current:p,action:'stairs'});return;}
     const stairId=el.closest('[data-stair-id]')?.getAttribute('data-stair-id');
     if(tool==='select'&&stairId){onSelectStair(stairId);return;}
-    if(tool==='measure'){onMeasurePoint(p);return;}
+    if(tool==='measure'){setDrag({kind:'tap',start:p,current:p,action:'measure'});return;}
     if(tool==='room'){
       setDrag({kind:'room',start:p,current:p});e.currentTarget.setPointerCapture(e.pointerId);return;
     }
@@ -42,7 +68,7 @@ export function PlanEditor({floor,tool,measurePoints,onMeasurePoint,selectedRoom
       if(id){setDrag({kind:'vertex',id,start:p,current:p});e.currentTarget.setPointerCapture(e.pointerId);}
       return;
     }
-    if(tool==='furniture'){onAddFurniture(p);return;}
+    if(tool==='furniture'){setDrag({kind:'tap',start:p,current:p,action:'furniture'});return;}
     const furnitureId=el.closest('[data-furniture-id]')?.getAttribute('data-furniture-id');
     if(tool==='select'&&furnitureId){
       onSelectFurniture(furnitureId);
@@ -60,16 +86,60 @@ export function PlanEditor({floor,tool,measurePoints,onMeasurePoint,selectedRoom
     const wallId=el.closest('[data-wall-id]')?.getAttribute('data-wall-id');
     const wall=floor.walls.find(w=>w.id===wallId);
     if((tool==='door'||tool==='window')&&wall){
-      onAddOpening(tool,wall.id,offsetForPoint(floor,wall,p));return;
+      setDrag({kind:'tap',id:wall.id,start:p,current:p,action:tool});return;
     }
     if(tool==='select'&&wall){onSelectWall(wall.id);return;}
     const room=[...floor.rooms].reverse().find(r=>pointInPolygon(p,roomPolygon(floor,r)));
     onSelectRoom(room?.id||null);
+    setDrag({kind:'pan',start:p,current:p,screen:{x:e.clientX,y:e.clientY}});
+    if(e.pointerType==='mouse')e.currentTarget.setPointerCapture(e.pointerId);
   };
-  const onMove=(e:PointerEvent<SVGSVGElement>)=>{if(drag)setDrag({...drag,current:toWorld(e)});};
+  const onMove=(e:PointerEvent<SVGSVGElement>)=>{
+    if(activePointers.current.has(e.pointerId)){
+      activePointers.current.set(e.pointerId,{x:e.clientX,y:e.clientY});
+      if(activePointers.current.size>=2){
+        const p=[...activePointers.current.values()];
+        const next={distance:distance(p[0],p[1]),
+          center:{x:(p[0].x+p[1].x)/2,y:(p[0].y+p[1].y)/2}};
+        const prev=gesture.current;
+        if(prev&&prev.distance>0&&next.distance>0){
+          const scale=scaleOfSvg();
+          setViewport(v=>panView(zoomView(v,next.distance/prev.distance,width,height),
+            next.center.x-prev.center.x,next.center.y-prev.center.y,scale));
+        }
+        gesture.current=next;return;
+      }
+    }
+    if(pinching.current)return;
+    if(drag?.kind==='pan'&&drag.screen){
+      const scale=scaleOfSvg();
+      setViewport(v=>panView(v,e.clientX-drag.screen!.x,e.clientY-drag.screen!.y,scale));
+      setDrag({...drag,screen:{x:e.clientX,y:e.clientY}});return;
+    }
+    if(drag)setDrag({...drag,current:toWorld(e)});
+  };
   const onUp=(e:PointerEvent<SVGSVGElement>)=>{
+    if(e.pointerType==='touch'){
+      activePointers.current.delete(e.pointerId);
+      if(activePointers.current.size<2)gesture.current=null;
+      if(pinching.current){
+        if(activePointers.current.size===0)pinching.current=false;
+        setDrag(null);
+        if(e.currentTarget.hasPointerCapture(e.pointerId))e.currentTarget.releasePointerCapture(e.pointerId);
+        return;
+      }
+    }
     if(!drag)return;
     const p=toWorld(e);
+    if(drag.kind==='tap'&&distance(drag.start,p)<.2){
+      if(drag.action==='measure')onMeasurePoint(drag.start);
+      else if(drag.action==='furniture')onAddFurniture(drag.start);
+      else if(drag.action==='stairs')onAddStair(drag.start);
+      else if((drag.action==='door'||drag.action==='window')&&drag.id){
+        const wall=floor.walls.find(w=>w.id===drag.id);
+        if(wall)onAddOpening(drag.action,wall.id,offsetForPoint(floor,wall,drag.start));
+      }
+    }
     if(drag.kind==='room'&&distance(drag.start,p)>0.7)onAddRoom(drag.start,p);
     if(drag.kind==='vertex'&&drag.id&&distance(drag.start,p)>0.03)onMoveVertex(drag.id,p);
     if(drag.kind==='furniture'&&drag.id&&distance(drag.start,p)>0.03){
@@ -83,13 +153,22 @@ export function PlanEditor({floor,tool,measurePoints,onMeasurePoint,selectedRoom
     setDrag(null);
     if(e.currentTarget.hasPointerCapture(e.pointerId))e.currentTarget.releasePointerCapture(e.pointerId);
   };
+  const onWheel=(e:React.WheelEvent<SVGSVGElement>)=>{
+    e.preventDefault();zoom(e.deltaY<0?1.12:1/1.12);
+  };
+  const cancel=(e:PointerEvent<SVGSVGElement>)=>{
+    activePointers.current.delete(e.pointerId);
+    if(activePointers.current.size<2)gesture.current=null;
+    if(activePointers.current.size===0)pinching.current=false;
+    setDrag(null);
+  };
   const lines=[];
-  for(let x=Math.floor(bounds.minX);x<=bounds.maxX;x++)lines.push(<line key={'x'+x} x1={x} y1={bounds.minY} x2={x} y2={bounds.maxY} stroke="#dce4ed" strokeWidth=".015"/>);
-  for(let y=Math.floor(bounds.minY);y<=bounds.maxY;y++)lines.push(<line key={'y'+y} x1={bounds.minX} y1={y} x2={bounds.maxX} y2={y} stroke="#dce4ed" strokeWidth=".015"/>);
-  return <svg aria-label="2D間取り図" ref={svgRef} viewBox={viewBox} preserveAspectRatio="xMidYMid meet"
-    onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp}
-    onPointerCancel={()=>setDrag(null)} className="plan-svg" style={{touchAction:'none'}}>
-    <rect x={bounds.minX} y={bounds.minY} width={width} height={height} fill="#f9fbff"/>
+  for(let x=Math.floor(bounds.minX+viewport.panX-1);x<=Math.ceil(bounds.minX+viewport.panX+viewWidth+1);x++)lines.push(<line key={'x'+x} x1={x} y1={bounds.minY+viewport.panY-1} x2={x} y2={bounds.minY+viewport.panY+viewHeight+1} stroke="#dce4ed" strokeWidth=".015"/>);
+  for(let y=Math.floor(bounds.minY+viewport.panY-1);y<=Math.ceil(bounds.minY+viewport.panY+viewHeight+1);y++)lines.push(<line key={'y'+y} x1={bounds.minX+viewport.panX-1} y1={y} x2={bounds.minX+viewport.panX+viewWidth+1} y2={y} stroke="#dce4ed" strokeWidth=".015"/>);
+  return <div className="plan-editor-shell"><svg aria-label="2D間取り図" ref={svgRef} viewBox={viewBox} preserveAspectRatio="xMidYMid meet"
+    onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onWheel={onWheel}
+    onPointerCancel={cancel} className="plan-svg" style={{touchAction:'none'}}>
+    <rect x={bounds.minX+viewport.panX-1} y={bounds.minY+viewport.panY-1} width={viewWidth+2} height={viewHeight+2} fill="#f9fbff"/>
     {lines}
     {floor.rooms.map(room=>{
       const poly=roomPolygon(floor,room);if(poly.some(p=>!Number.isFinite(p.x)))return null;
@@ -148,5 +227,11 @@ export function PlanEditor({floor,tool,measurePoints,onMeasurePoint,selectedRoom
       width={Math.abs(drag.start.x-drag.current.x)} height={Math.abs(drag.start.y-drag.current.y)}
       fill="#63aadb" fillOpacity=".2" stroke="#2375a4" strokeWidth=".04" strokeDasharray=".16,.09"/>}
     {drag?.kind==='vertex'&&<circle cx={drag.current.x} cy={drag.current.y} r=".14" fill="#ed6c3d"/>}
-  </svg>;
+  </svg>
+    <div className="plan-zoom" aria-label="表示倍率">
+      <button onClick={()=>zoom(1.3)} aria-label="拡大">＋</button>
+      <button onClick={()=>setViewport(initialView)} aria-label="全体表示">全体</button>
+      <button onClick={()=>zoom(1/1.3)} aria-label="縮小">−</button>
+    </div>
+  </div>;
 }
