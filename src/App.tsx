@@ -213,7 +213,7 @@ export default function App(){
             </>}
             <button onClick={()=>removeOpening(activeOpening.id)}>このドア・窓を削除</button>
           </div>}
-          <div className="metrics"><strong>{area.toFixed(2)}㎡</strong><span>部屋面積合計（内法概算）</span><strong>{(area/1.62).toFixed(1)}帖</strong></div>
+          <div className="metrics"><strong>{area.toFixed(2)}㎡</strong><span>部屋面積合計（壁芯概算）</span><strong>{(area/1.62).toFixed(1)}帖</strong></div>
         </section>
         <section className="panel">
           <h2>GitHubに保存・読み込み</h2>

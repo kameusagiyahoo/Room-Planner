@@ -6,8 +6,8 @@
 - [x] 2D rectangular rooms, vertex drag, area, JSON import/export
 - [x] Basic 3D preview
 - [x] IndexedDB draft and GitHub Contents API explicit save/load
-- [ ] Geometric edge splitting and T-junction topology: shared walls
-- [ ] Full door/window styles and editable inspector with opening animation
+- [x] Geometric edge splitting and T-junction topology for rectangular room insertion; initial consistency tests
+- [ ] Full door/window catalog and animations (basic door/window selection, drag, and parametric inspector implemented)
 - [ ] Camera walk mode with reliable collision and stair constraints
 - [ ] Asset catalog and GLB/GLTF furniture loading
 - [ ] Multi-floor editor and navigation
