@@ -3,6 +3,7 @@ import type { ChangeEvent } from 'react';
 import { PlanEditor } from './components/PlanEditor';
 import type { DrawTool } from './components/PlanEditor';
 import { BuildingViewer3D } from './components/BuildingViewer3D';
+import { MobileDock } from './components/MobileDock';
 import type { HouseProject, Point } from './domain/model';
 import { emptyProject, exampleProject, emptyFloor } from './domain/model';
 import { roomArea, roundGrid, distance, wallPoints } from './domain/geometry';
@@ -18,6 +19,7 @@ import { loadRemote, saveRemote } from './storage/github';
 import type { GitHubTarget } from './storage/github';
 
 type ViewMode='2d'|'3d'|'split';
+type MobilePanel='project'|'floors'|'tools'|'check'|null;
 type RemoteMeta={key:string;sha:string};
 const clone=(p:HouseProject)=>structuredClone(p);
 const remoteKey=(t:GitHubTarget,id:string)=>[t.owner,t.repo,t.branch,id].join('/');
@@ -31,7 +33,8 @@ export default function App(){
   const [loaded,setLoaded]=useState(false);
   const [tool,setTool]=useState<DrawTool>('select');
   const [activeFloorId,setActiveFloorId]=useState<string>('floor-1');
-  const [view,setView]=useState<ViewMode>('split');
+  const [view,setView]=useState<ViewMode>(()=>typeof window!=='undefined'&&window.matchMedia('(max-width:730px)').matches?'2d':'split');
+  const [mobilePanel,setMobilePanel]=useState<MobilePanel>(null);
   const [selectedRoom,setSelectedRoom]=useState<string|null>(null);
   const [selectedWall,setSelectedWall]=useState<string|null>(null);
   const [selectedOpening,setSelectedOpening]=useState<string|null>(null);
@@ -63,11 +66,11 @@ export default function App(){
   const measureDistance=measurePoints.length===2?distance(measurePoints[0],measurePoints[1]):null;
   const minimumDiameter=measurePoints.length===2?minimumPassageDiameter(floor,measurePoints[0],measurePoints[1]):null;
   const addMeasurePoint=(point:Point)=>setMeasurePoints(prev=>prev.length>=2?[point]:[...prev,point]);
-  const selectRoom=(id:string|null)=>{setSelectedRoom(id);setSelectedWall(null);setSelectedOpening(null);};
-  const selectWall=(id:string|null)=>{setSelectedWall(id);setSelectedRoom(null);setSelectedOpening(null);};
-  const selectOpening=(id:string|null)=>{setSelectedOpening(id);setSelectedWall(null);setSelectedRoom(null);};
+  const selectRoom=(id:string|null)=>{setSelectedRoom(id);setSelectedWall(null);setSelectedOpening(null);if(id)setMobilePanel('tools');};
+  const selectWall=(id:string|null)=>{setSelectedWall(id);setSelectedRoom(null);setSelectedOpening(null);if(id)setMobilePanel('tools');};
+  const selectOpening=(id:string|null)=>{setSelectedOpening(id);setSelectedWall(null);setSelectedRoom(null);if(id)setMobilePanel('tools');};
 
-  const selectStair=(id:string|null)=>{setSelectedStair(id);setSelectedFurniture(null);setSelectedRoom(null);setSelectedWall(null);setSelectedOpening(null);};
+  const selectStair=(id:string|null)=>{if(id)setMobilePanel('tools');setSelectedStair(id);setSelectedFurniture(null);setSelectedRoom(null);setSelectedWall(null);setSelectedOpening(null);};
   const placeStair=(p:Point)=>edit(next=>{
     const destination=stairTarget&&stairTarget!==floor.id?stairTarget:otherFloors[0]?.id;
     if(!destination)throw Error('先に移動先の階を追加してください');
@@ -87,7 +90,7 @@ export default function App(){
     if(!target){setStatus('移動先の階がありません');return;}
     switchFloor(target.floorId);setView('3d');setStatus('階段で移動先の階を表示しました');
   };
-  const selectFurniture=(id:string|null)=>{setSelectedFurniture(id);setSelectedRoom(null);setSelectedWall(null);setSelectedOpening(null);};
+  const selectFurniture=(id:string|null)=>{if(id)setMobilePanel('tools');setSelectedFurniture(id);setSelectedRoom(null);setSelectedWall(null);setSelectedOpening(null);};
   useEffect(()=>{
     let alive=true;
     loadDraft().then(draft=>{
@@ -212,7 +215,7 @@ export default function App(){
   };
   const switchFloor=(id:string)=>{
     setActiveFloorId(id);setSelectedRoom(null);setSelectedWall(null);setSelectedOpening(null);
-    setSelectedFurniture(null);setMeasurePoints([]);
+    setSelectedFurniture(null);setMeasurePoints([]);setMobilePanel(null);
   };
   const addFloor=()=>{
     const f=emptyFloor((project.floors.length+1)+'階');
@@ -238,16 +241,30 @@ export default function App(){
     setActiveFloorId(p.floors[0].id);selectRoom(null);setSelectedStair(null);setMeasurePoints([]);
     setRemoteMeta(null);setRemoteId(p.id);setView('3d');
   };
-  return <div className="app">
+  const selectTool=(next:DrawTool)=>{
+    setTool(next);setView('2d');
+    setMobilePanel(next==='furniture'||next==='stairs'?'tools':null);
+    if(next==='measure')setMeasurePoints([]);
+  };
+  return <div className={'app '+(mobilePanel?'mobile-sheet-open mobile-sheet-'+mobilePanel:'')}>
     <header className="header">
-      <div className="brand"><strong>Room Planner</strong><span>GitHub Pages / v0.1</span></div>
+      <div className="brand"><strong>Room Planner</strong><span>住宅間取りエディタ</span></div>
+      <div className="mobile-header-floor"><label htmlFor="mobile-floor">階</label>
+        <select id="mobile-floor" value={floor.id} onChange={e=>switchFloor(e.target.value)}>
+          {project.floors.map(f=><option key={f.id} value={f.id}>{f.name}</option>)}
+        </select>
+      </div>
       <div className="header-right"><button onClick={()=>setView('2d')} aria-pressed={view==='2d'}>2D</button>
       <button onClick={()=>setView('3d')} aria-pressed={view==='3d'}>3D</button>
-      <button className="split-button" onClick={()=>setView('split')} aria-pressed={view==='split'}>分割</button></div>
+      <button className="split-button" onClick={()=>setView('split')} aria-pressed={view==='split'}>分割</button>
+      <button className="mobile-undo" onClick={undo} disabled={!history.current.length} aria-label="元に戻す">↶</button></div>
     </header>
+    {mobilePanel&&<button type="button" className="mobile-scrim" onClick={()=>setMobilePanel(null)} aria-label="編集パネルを閉じる"/>}
     <div className="layout">
-      <aside className="controls">
-        <section className="panel">
+      <aside className="controls" aria-label="設定・編集パネル">
+        <div className="mobile-sheet-heading"><strong>{mobilePanel==='floors'?'階の設定':mobilePanel==='project'?'プロジェクト':mobilePanel==='check'?'検証':'道具・詳細設定'}</strong>
+          <button onClick={()=>setMobilePanel(null)} aria-label="パネルを閉じる">閉じる ×</button></div>
+        <section className="panel panel-project">
           <h2>プロジェクト</h2>
           <label>名前<input value={project.name} onChange={e=>setName(e.target.value)}/></label>
           <div className="actions"><button onClick={createNew}>新規</button><button onClick={startExample}>練習用サンプル</button>
@@ -257,7 +274,7 @@ export default function App(){
             <label className="file-button">JSON読込<input type="file" accept=".json,application/json" onChange={importFile}/></label></div>
           <small>編集データはIndexedDBへ自動一時保存（{draftStatus}）</small>
         </section>
-        <section className="panel">
+        <section className="panel panel-floors">
           <h2>階の管理</h2>
           <label>表示する階<select value={floor.id} onChange={e=>switchFloor(e.target.value)}>
             {project.floors.map(f=><option key={f.id} value={f.id}>{f.name}（床高さ {f.elevation.toFixed(2)}m）</option>)}
@@ -268,7 +285,7 @@ export default function App(){
             <button onClick={removeFloor} disabled={project.floors.length<=1}>現在の階を削除</button></div>
           <small>各階の間取り・家具・ドア・窓を個別編集。階段を歩いて昇降するには、上下階に階段を収める部屋と踊り場が必要です。</small>
         </section>
-        <section className="panel">
+        <section className="panel panel-tools">
           <h2>2D編集</h2>
           <div className="actions">
             <button aria-pressed={tool==='select'} onClick={()=>setTool('select')}>選択</button>
@@ -355,7 +372,7 @@ export default function App(){
           </div>}
           <div className="metrics"><strong>{area.toFixed(2)}㎡</strong><span>部屋面積合計（壁芯概算）</span><strong>{(area/1.62).toFixed(1)}帖</strong></div>
         </section>
-        <section className="panel">
+        <section className="panel panel-project">
           <h2>GitHubに保存・読み込み</h2>
           <small>専用の非公開データリポジトリを用意し、Contents権限付きFine-grained PATを使用。トークンはこの画面内のメモリのみに保持。</small>
           <label>所有者<input value={target.owner} onChange={e=>changeTarget('owner',e.target.value)}/></label>
@@ -391,6 +408,11 @@ export default function App(){
         </section>
       </aside>
     </div>
+    <MobileDock view={view} tool={tool} floorName={floor.name}
+      onSelectTool={selectTool} onViewChange={v=>{setView(v);setMobilePanel(null);}}
+      onOpenPanel={p=>setMobilePanel(current=>current===p?null:p)}
+      onUndo={undo} onRedo={redoChange}
+      canUndo={history.current.length>0} canRedo={redo.current.length>0}/>
     <footer className="status" role="status">{status}</footer>
   </div>;
 }

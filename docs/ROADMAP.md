@@ -19,6 +19,7 @@
 - [x] Continuous first-person stair ascent/descent, cutout in the upper floor surface and reserved stairwell collision
 - [ ] Advanced stair geometry: turning flights, multi-flight landings, accurate handrails and vertical body collisions
 - [ ] Real floorplan sample and trace/calibration workflow
-- [ ] Mobile usability, performance, regression/screenshot tests
+- [x] Mobile screen layout: full-height drawing area, bottom action dock and contextual settings sheet
+- [ ] Mobile gesture accessibility, iPhone browser validation and regression/screenshot tests
 - [x] Add optional stairs schema fields without breaking legacy single-floor projects
 - [ ] Schema migrations and robust diff/conflict UI
