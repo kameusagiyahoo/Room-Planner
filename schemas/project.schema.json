@@ -1,0 +1,303 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Room Planner Project v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "id",
+    "name",
+    "units",
+    "updatedAt",
+    "floors"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "1.0.0"
+    },
+    "id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "name": {
+      "type": "string"
+    },
+    "units": {
+      "const": "m"
+    },
+    "updatedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "floors": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/floor"
+      }
+    }
+  },
+  "$defs": {
+    "point": {
+      "type": "object",
+      "required": [
+        "x",
+        "y"
+      ],
+      "properties": {
+        "x": {
+          "type": "number"
+        },
+        "y": {
+          "type": "number"
+        }
+      },
+      "additionalProperties": false
+    },
+    "vertex": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/point"
+        }
+      ]
+    },
+    "wallLink": {
+      "type": "object",
+      "required": [
+        "wallId",
+        "reversed"
+      ],
+      "properties": {
+        "wallId": {
+          "type": "string"
+        },
+        "reversed": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    },
+    "floor": {
+      "type": "object",
+      "required": [
+        "id",
+        "name",
+        "elevation",
+        "ceilingHeight",
+        "vertices",
+        "walls",
+        "rooms",
+        "openings",
+        "furniture"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "elevation": {
+          "type": "number"
+        },
+        "ceilingHeight": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "vertices": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "x",
+              "y"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "x": {
+                "type": "number"
+              },
+              "y": {
+                "type": "number"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "walls": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "a",
+              "b",
+              "thickness"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "a": {
+                "type": "string"
+              },
+              "b": {
+                "type": "string"
+              },
+              "thickness": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              },
+              "height": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "rooms": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "name",
+              "boundary"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "boundary": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/wallLink"
+                }
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "openings": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "kind",
+              "wallId",
+              "offset",
+              "width",
+              "height",
+              "sillHeight",
+              "style"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "kind": {
+                "enum": [
+                  "door",
+                  "window"
+                ]
+              },
+              "wallId": {
+                "type": "string"
+              },
+              "offset": {
+                "type": "number"
+              },
+              "width": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              },
+              "height": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              },
+              "sillHeight": {
+                "type": "number",
+                "minimum": 0
+              },
+              "style": {
+                "enum": [
+                  "hinged",
+                  "sliding",
+                  "fixed"
+                ]
+              },
+              "swing": {
+                "enum": [
+                  "left",
+                  "right"
+                ]
+              },
+              "open": {
+                "type": "boolean"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "furniture": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "name",
+              "kind",
+              "x",
+              "y",
+              "width",
+              "depth",
+              "height",
+              "rotation"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "kind": {
+                "type": "string"
+              },
+              "x": {
+                "type": "number"
+              },
+              "y": {
+                "type": "number"
+              },
+              "width": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              },
+              "depth": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              },
+              "height": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              },
+              "rotation": {
+                "type": "number"
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}
