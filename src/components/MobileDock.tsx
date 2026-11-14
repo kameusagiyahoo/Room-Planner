@@ -2,7 +2,7 @@ import type {DrawTool} from './PlanEditor';
 
 type MobilePanel='project'|'floors'|'tools'|'check';
 type Props={
-  view:'2d'|'3d'|'split';tool:DrawTool;floorName:string;
+  view:'2d'|'3d'|'split';tool:DrawTool;floorName:string;selectedName?:string;
   onSelectTool:(tool:DrawTool)=>void;
   onViewChange:(view:'2d'|'3d')=>void;
   onOpenPanel:(panel:MobilePanel)=>void;
@@ -15,7 +15,7 @@ const primaryTools:{tool:DrawTool;symbol:string;label:string}[]=[
   {tool:'door',symbol:'⊏',label:'ドア'},
   {tool:'measure',symbol:'↔',label:'計測'}
 ];
-export function MobileDock({view,tool,floorName,onSelectTool,onViewChange,onOpenPanel,onUndo,onRedo,canUndo,canRedo}:Props){
+export function MobileDock({view,tool,floorName,selectedName,onSelectTool,onViewChange,onOpenPanel,onUndo,onRedo,canUndo,canRedo}:Props){
   return <nav className="mobile-dock" aria-label="スマホ用編集メニュー">
     <div className="mobile-dock-main">
       {primaryTools.map(item=><button key={item.tool} className="mobile-dock-tool"
@@ -24,7 +24,7 @@ export function MobileDock({view,tool,floorName,onSelectTool,onViewChange,onOpen
         <span aria-hidden="true">{item.symbol}</span><small>{item.label}</small>
       </button>)}
       <button className="mobile-dock-tool mobile-dock-all" onClick={()=>onOpenPanel('tools')}>
-        <span aria-hidden="true">⋯</span><small>すべて</small>
+        <span aria-hidden="true">⋯</span><small>{selectedName?'詳細':'すべて'}</small>
       </button>
     </div>
     <div className="mobile-dock-sub">

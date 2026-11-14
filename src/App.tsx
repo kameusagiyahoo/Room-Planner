@@ -66,11 +66,11 @@ export default function App(){
   const measureDistance=measurePoints.length===2?distance(measurePoints[0],measurePoints[1]):null;
   const minimumDiameter=measurePoints.length===2?minimumPassageDiameter(floor,measurePoints[0],measurePoints[1]):null;
   const addMeasurePoint=(point:Point)=>setMeasurePoints(prev=>prev.length>=2?[point]:[...prev,point]);
-  const selectRoom=(id:string|null)=>{setSelectedRoom(id);setSelectedWall(null);setSelectedOpening(null);if(id)setMobilePanel('tools');};
-  const selectWall=(id:string|null)=>{setSelectedWall(id);setSelectedRoom(null);setSelectedOpening(null);if(id)setMobilePanel('tools');};
-  const selectOpening=(id:string|null)=>{setSelectedOpening(id);setSelectedWall(null);setSelectedRoom(null);if(id)setMobilePanel('tools');};
+  const selectRoom=(id:string|null)=>{setSelectedRoom(id);setSelectedWall(null);setSelectedOpening(null);};
+  const selectWall=(id:string|null)=>{setSelectedWall(id);setSelectedRoom(null);setSelectedOpening(null);};
+  const selectOpening=(id:string|null)=>{setSelectedOpening(id);setSelectedWall(null);setSelectedRoom(null);};
 
-  const selectStair=(id:string|null)=>{if(id)setMobilePanel('tools');setSelectedStair(id);setSelectedFurniture(null);setSelectedRoom(null);setSelectedWall(null);setSelectedOpening(null);};
+  const selectStair=(id:string|null)=>{setSelectedStair(id);setSelectedFurniture(null);setSelectedRoom(null);setSelectedWall(null);setSelectedOpening(null);};
   const placeStair=(p:Point)=>edit(next=>{
     const destination=stairTarget&&stairTarget!==floor.id?stairTarget:otherFloors[0]?.id;
     if(!destination)throw Error('先に移動先の階を追加してください');
@@ -90,7 +90,7 @@ export default function App(){
     if(!target){setStatus('移動先の階がありません');return;}
     switchFloor(target.floorId);setView('3d');setStatus('階段で移動先の階を表示しました');
   };
-  const selectFurniture=(id:string|null)=>{if(id)setMobilePanel('tools');setSelectedFurniture(id);setSelectedRoom(null);setSelectedWall(null);setSelectedOpening(null);};
+  const selectFurniture=(id:string|null)=>{setSelectedFurniture(id);setSelectedRoom(null);setSelectedWall(null);setSelectedOpening(null);};
   useEffect(()=>{
     let alive=true;
     loadDraft().then(draft=>{
@@ -264,6 +264,12 @@ export default function App(){
       <aside className="controls" aria-label="設定・編集パネル">
         <div className="mobile-sheet-heading"><strong>{mobilePanel==='floors'?'階の設定':mobilePanel==='project'?'プロジェクト':mobilePanel==='check'?'検証':'道具・詳細設定'}</strong>
           <button onClick={()=>setMobilePanel(null)} aria-label="パネルを閉じる">閉じる ×</button></div>
+        <div className="mobile-check-panel">
+          <h2>干渉・整合性</h2>
+          <p className={collisionWarnings.length?'error':'ok'}>家具の干渉：{collisionWarnings.length}件</p>
+          <p className={hasErrors?'error':'ok'}>基本検証：{hasErrors?'エラーあり':'OK'}</p>
+          {issues.length?issues.map((issue,i)=><p key={i} className={issue.severity==='error'?'error':'warning'}>{issue.message}</p>):<p>検証上の問題は見つかりませんでした。</p>}
+        </div>
         <section className="panel panel-project">
           <h2>プロジェクト</h2>
           <label>名前<input value={project.name} onChange={e=>setName(e.target.value)}/></label>
@@ -409,6 +415,7 @@ export default function App(){
       </aside>
     </div>
     <MobileDock view={view} tool={tool} floorName={floor.name}
+      selectedName={activeFurniture?.name??activeStair&&'階段'??activeRoom?.name??activeOpening?.kind&&'建具'??activeWall&&'壁'??undefined}
       onSelectTool={selectTool} onViewChange={v=>{setView(v);setMobilePanel(null);}}
       onOpenPanel={p=>setMobilePanel(current=>current===p?null:p)}
       onUndo={undo} onRedo={redoChange}

@@ -20,6 +20,7 @@
 - [ ] Advanced stair geometry: turning flights, multi-flight landings, accurate handrails and vertical body collisions
 - [ ] Real floorplan sample and trace/calibration workflow
 - [x] Mobile screen layout: full-height drawing area, bottom action dock and contextual settings sheet
-- [ ] Mobile gesture accessibility, iPhone browser validation and regression/screenshot tests
+- [x] SVG view pinch-to-zoom, one-finger pan in select mode, wheel zoom and explicit zoom controls
+- [ ] iPhone browser validation, touch edge cases and regression/screenshot tests
 - [x] Add optional stairs schema fields without breaking legacy single-floor projects
 - [ ] Schema migrations and robust diff/conflict UI
