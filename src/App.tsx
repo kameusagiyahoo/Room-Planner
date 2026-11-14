@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ChangeEvent } from 'react';
 import { PlanEditor } from './components/PlanEditor';
 import type { DrawTool } from './components/PlanEditor';
-import { Viewer3D } from './components/Viewer3D';
+import { BuildingViewer3D } from './components/BuildingViewer3D';
 import type { HouseProject, Point } from './domain/model';
 import { emptyProject, exampleProject, emptyFloor } from './domain/model';
 import { roomArea, roundGrid, distance, wallPoints } from './domain/geometry';
@@ -365,7 +365,7 @@ export default function App(){
           onSelectRoom={selectRoom} onSelectWall={selectWall} onSelectOpening={selectOpening} onSelectFurniture={selectFurniture} onSelectStair={selectStair}
           onAddRoom={addRoom} onMoveVertex={moveVertex} onAddOpening={addDoorOrWindow} onMoveOpening={repositionOpening} onAddStair={placeStair} onAddFurniture={place} onMoveFurniture={moveFurniture}/></div></section>}
         {view!=='2d'&&<section className="view-pane"><h2>3D表示 <span>{floor.name} / 俯瞰 / 衝突判定付き歩行</span></h2>
-          <div className="view-body"><Viewer3D floor={floor}/></div></section>}
+          <div className="view-body"><BuildingViewer3D project={project} activeFloorId={floor.id} onFloorChange={switchFloor}/></div></section>}
       </main>
       <aside className="right-pane">
         <section className="panel"><h2>家具干渉診断</h2>
