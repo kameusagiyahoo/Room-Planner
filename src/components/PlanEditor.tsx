@@ -15,7 +15,7 @@ type Props={
   onMoveOpening:(id:string,offset:number)=>void;
   onAddFurniture:(point:Point)=>void;onMoveFurniture:(id:string,point:Point)=>void;
 };
-type Drag={kind:'room'|'vertex'|'opening'|'furniture';start:Point;current:Point;id?:string};
+type Drag={kind:'room'|'vertex'|'opening'|'furniture';start:Point;current:Point;id?:string;grab?:Point};
 export function PlanEditor({floor,tool,measurePoints,onMeasurePoint,selectedRoom,selectedWall,selectedOpening,selectedFurniture,
   onSelectRoom,onSelectWall,onSelectOpening,onSelectFurniture,onAddRoom,onMoveVertex,onAddOpening,onMoveOpening,onAddFurniture,onMoveFurniture}:Props){
   const svgRef=useRef<SVGSVGElement>(null),[drag,setDrag]=useState<Drag|null>(null);
@@ -42,7 +42,10 @@ export function PlanEditor({floor,tool,measurePoints,onMeasurePoint,selectedRoom
     if(tool==='furniture'){onAddFurniture(p);return;}
     const furnitureId=el.closest('[data-furniture-id]')?.getAttribute('data-furniture-id');
     if(tool==='select'&&furnitureId){
-      onSelectFurniture(furnitureId);setDrag({kind:'furniture',id:furnitureId,start:p,current:p});
+      onSelectFurniture(furnitureId);
+      const furniture=floor.furniture.find(f=>f.id===furnitureId);
+      setDrag({kind:'furniture',id:furnitureId,start:p,current:p,
+        grab:furniture?{x:p.x-furniture.x,y:p.y-furniture.y}:undefined});
       e.currentTarget.setPointerCapture(e.pointerId);return;
     }
     const openingId=el.closest('[data-opening-id]')?.getAttribute('data-opening-id');
@@ -68,7 +71,7 @@ export function PlanEditor({floor,tool,measurePoints,onMeasurePoint,selectedRoom
     if(drag.kind==='vertex'&&drag.id&&distance(drag.start,p)>0.03)onMoveVertex(drag.id,p);
     if(drag.kind==='furniture'&&drag.id&&distance(drag.start,p)>0.03){
       const f=floor.furniture.find(f=>f.id===drag.id);
-      if(f)onMoveFurniture(drag.id,{x:p.x-f.width/2,y:p.y-f.depth/2});
+      if(f)onMoveFurniture(drag.id,{x:p.x-(drag.grab?.x??f.width/2),y:p.y-(drag.grab?.y??f.depth/2)});
     }
     if(drag.kind==='opening'&&drag.id&&distance(drag.start,p)>0.03){
       const opening=floor.openings.find(o=>o.id===drag.id),wall=opening&&floor.walls.find(w=>w.id===opening.wallId);

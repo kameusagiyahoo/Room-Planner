@@ -144,10 +144,11 @@ export function Viewer3D({floor}:Props){
       renderer.domElement.removeEventListener('pointerdown',down);
       renderer.domElement.removeEventListener('pointermove',move);
       renderer.domElement.removeEventListener('pointerup',up);
-      renderer.domElement.removeEventListener('pointercancel',up);scene.traverse(o=>{
+      renderer.domElement.removeEventListener('pointercancel',up);
+      disposeFurniture();scene.traverse(o=>{
       if(o instanceof THREE.Mesh){o.geometry.dispose();}
     });for(const mat of [floorMaterial,wallMaterial,windowMaterial,doorMaterial])mat.dispose();
-    disposeFurniture();grid.geometry.dispose();renderer.dispose();node.removeChild(renderer.domElement);};
+    grid.geometry.dispose();renderer.dispose();node.removeChild(renderer.domElement);};
   },[floor,eyeHeight]);
   const toggle=()=>{
     keys.current.clear();touch.current={forward:0,side:0,turn:0};
