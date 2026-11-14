@@ -54,9 +54,10 @@ export function splitWall(f:Floor,wallId:string,p:Point):string {
   return middle.id;
 }
 /** Rectangular room insertion supports shared subsegments/T junctions and rejects interior overlap. */
-export function insertRectangle(f:Floor,a:Point,b:Point,name:string):Room {
-  const x0=roundGrid(Math.min(a.x,b.x)),y0=roundGrid(Math.min(a.y,b.y));
-  const x1=roundGrid(Math.max(a.x,b.x)),y1=roundGrid(Math.max(a.y,b.y));
+export function insertRectangle(f:Floor,a:Point,b:Point,name:string,grid=0.1):Room {
+  const step=grid>0?grid:.001;
+  const x0=roundGrid(Math.min(a.x,b.x),step),y0=roundGrid(Math.min(a.y,b.y),step);
+  const x1=roundGrid(Math.max(a.x,b.x),step),y1=roundGrid(Math.max(a.y,b.y),step);
   if(x1-x0<0.5||y1-y0<0.5)throw Error('部屋は幅・奥行きとも0.5m以上にしてください');
   if(f.rooms.some(r=>overlapArea(roomPolygon(f,r),x0,x1,y0,y1)>1e-5))
     throw Error('既存の部屋と重複しています');
