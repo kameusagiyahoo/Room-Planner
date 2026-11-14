@@ -1,11 +1,21 @@
-import { useRef, useState } from 'react';
-import type { PointerEvent } from 'react';
-import type { Floor, Point } from '../domain/model';
-import { distance, getBounds, openingMidpoint, pointInPolygon, roomArea, roomPolygon, wallPoints } from '../domain/geometry';
-export type DrawTool='select'|'room'|'vertex';
-type Props={floor:Floor;tool:DrawTool;selectedRoom:string|null;onSelect:(id:string|null)=>void;onAddRoom:(a:Point,b:Point)=>void;onMoveVertex:(id:string,p:Point)=>void};
-type Drag={kind:'room'|'vertex';start:Point;current:Point;vertexId?:string};
-export function PlanEditor({floor,tool,selectedRoom,onSelect,onAddRoom,onMoveVertex}:Props){
+import {useRef,useState} from 'react';
+import type {PointerEvent} from 'react';
+import type {Floor,Point} from '../domain/model';
+import {distance,getBounds,openingMidpoint,pointInPolygon,roomArea,roomPolygon,wallPoints} from '../domain/geometry';
+import {offsetForPoint} from '../domain/openings';
+
+export type DrawTool='select'|'room'|'vertex'|'door'|'window';
+type Props={
+  floor:Floor;tool:DrawTool;
+  selectedRoom:string|null;selectedWall:string|null;selectedOpening:string|null;
+  onSelectRoom:(id:string|null)=>void;onSelectWall:(id:string|null)=>void;onSelectOpening:(id:string|null)=>void;
+  onAddRoom:(a:Point,b:Point)=>void;onMoveVertex:(id:string,p:Point)=>void;
+  onAddOpening:(kind:'door'|'window',wallId:string,offset:number)=>void;
+  onMoveOpening:(id:string,offset:number)=>void;
+};
+type Drag={kind:'room'|'vertex'|'opening';start:Point;current:Point;id?:string};
+export function PlanEditor({floor,tool,selectedRoom,selectedWall,selectedOpening,
+  onSelectRoom,onSelectWall,onSelectOpening,onAddRoom,onMoveVertex,onAddOpening,onMoveOpening}:Props){
   const svgRef=useRef<SVGSVGElement>(null),[drag,setDrag]=useState<Drag|null>(null);
   const bounds=getBounds(floor),width=Math.max(8,bounds.maxX-bounds.minX),height=Math.max(6,bounds.maxY-bounds.minY);
   const viewBox=[bounds.minX,bounds.minY,width,height].join(' ');
@@ -16,28 +26,47 @@ export function PlanEditor({floor,tool,selectedRoom,onSelect,onAddRoom,onMoveVer
     return {x:converted.x,y:converted.y};
   };
   const onDown=(e:PointerEvent<SVGSVGElement>)=>{
-    const p=toWorld(e),element=e.target as Element;
-    if(tool==='room'){setDrag({kind:'room',start:p,current:p});e.currentTarget.setPointerCapture(e.pointerId);return;}
+    if(e.button!==0 && e.pointerType==='mouse')return;
+    const p=toWorld(e),el=e.target as Element;
+    if(tool==='room'){
+      setDrag({kind:'room',start:p,current:p});e.currentTarget.setPointerCapture(e.pointerId);return;
+    }
     if(tool==='vertex'){
-      const circle=element.closest('[data-vertex]'),id=circle?.getAttribute('data-vertex');
-      if(id){setDrag({kind:'vertex',vertexId:id,start:p,current:p});e.currentTarget.setPointerCapture(e.pointerId);}
+      const id=el.closest('[data-vertex]')?.getAttribute('data-vertex');
+      if(id){setDrag({kind:'vertex',id,start:p,current:p});e.currentTarget.setPointerCapture(e.pointerId);}
       return;
     }
+    const openingId=el.closest('[data-opening-id]')?.getAttribute('data-opening-id');
+    if(tool==='select' && openingId){
+      onSelectOpening(openingId);
+      setDrag({kind:'opening',id:openingId,start:p,current:p});
+      e.currentTarget.setPointerCapture(e.pointerId);return;
+    }
+    const wallId=el.closest('[data-wall-id]')?.getAttribute('data-wall-id');
+    const wall=floor.walls.find(w=>w.id===wallId);
+    if((tool==='door'||tool==='window')&&wall){
+      onAddOpening(tool,wall.id,offsetForPoint(floor,wall,p));return;
+    }
+    if(tool==='select'&&wall){onSelectWall(wall.id);return;}
     const room=[...floor.rooms].reverse().find(r=>pointInPolygon(p,roomPolygon(floor,r)));
-    onSelect(room?.id||null);
+    onSelectRoom(room?.id||null);
   };
   const onMove=(e:PointerEvent<SVGSVGElement>)=>{if(drag)setDrag({...drag,current:toWorld(e)});};
   const onUp=(e:PointerEvent<SVGSVGElement>)=>{
     if(!drag)return;
     const p=toWorld(e);
     if(drag.kind==='room'&&distance(drag.start,p)>0.7)onAddRoom(drag.start,p);
-    if(drag.kind==='vertex'&&drag.vertexId&&distance(drag.start,p)>0.03)onMoveVertex(drag.vertexId,p);
+    if(drag.kind==='vertex'&&drag.id&&distance(drag.start,p)>0.03)onMoveVertex(drag.id,p);
+    if(drag.kind==='opening'&&drag.id&&distance(drag.start,p)>0.03){
+      const opening=floor.openings.find(o=>o.id===drag.id),wall=opening&&floor.walls.find(w=>w.id===opening.wallId);
+      if(wall)onMoveOpening(drag.id,offsetForPoint(floor,wall,p));
+    }
     setDrag(null);
     if(e.currentTarget.hasPointerCapture(e.pointerId))e.currentTarget.releasePointerCapture(e.pointerId);
   };
-  const step=1,lines=[];
-  for(let x=Math.floor(bounds.minX);x<=bounds.maxX;x+=step)lines.push(<line key={'x'+x} x1={x} y1={bounds.minY} x2={x} y2={bounds.maxY} stroke="#dce4ed" strokeWidth=".015"/>);
-  for(let y=Math.floor(bounds.minY);y<=bounds.maxY;y+=step)lines.push(<line key={'y'+y} x1={bounds.minX} y1={y} x2={bounds.maxX} y2={y} stroke="#dce4ed" strokeWidth=".015"/>);
+  const lines=[];
+  for(let x=Math.floor(bounds.minX);x<=bounds.maxX;x++)lines.push(<line key={'x'+x} x1={x} y1={bounds.minY} x2={x} y2={bounds.maxY} stroke="#dce4ed" strokeWidth=".015"/>);
+  for(let y=Math.floor(bounds.minY);y<=bounds.maxY;y++)lines.push(<line key={'y'+y} x1={bounds.minX} y1={y} x2={bounds.maxX} y2={y} stroke="#dce4ed" strokeWidth=".015"/>);
   return <svg aria-label="2D間取り図" ref={svgRef} viewBox={viewBox} preserveAspectRatio="xMidYMid meet"
     onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp}
     onPointerCancel={()=>setDrag(null)} className="plan-svg" style={{touchAction:'none'}}>
@@ -54,20 +83,27 @@ export function PlanEditor({floor,tool,selectedRoom,onSelect,onAddRoom,onMoveVer
       </g>;
     })}
     {floor.walls.map(w=>{
-      const points=wallPoints(floor,w);if(!points)return null;
-      return <line key={w.id} x1={points[0].x} y1={points[0].y} x2={points[1].x} y2={points[1].y}
-        stroke="#314b62" strokeWidth={w.thickness} strokeLinecap="square"/>;
+      const pts=wallPoints(floor,w);if(!pts)return null;
+      return <g key={w.id}>
+        <line x1={pts[0].x} y1={pts[0].y} x2={pts[1].x} y2={pts[1].y}
+          stroke={selectedWall===w.id?'#1b8ccc':'#314b62'} strokeWidth={w.thickness} strokeLinecap="square"/>
+        <line data-wall-id={w.id} x1={pts[0].x} y1={pts[0].y} x2={pts[1].x} y2={pts[1].y}
+          stroke="transparent" strokeWidth=".30" pointerEvents="stroke"/>
+      </g>;
     })}
     {floor.openings.map(o=>{
-      const wall=floor.walls.find(w=>w.id===o.wallId);if(!wall)return null;
-      const pts=wallPoints(floor,wall),center=openingMidpoint(floor,wall,o.offset);
-      if(!pts||!center)return null;
-      const d={x:(pts[1].x-pts[0].x)/distance(...pts),y:(pts[1].y-pts[0].y)/distance(...pts)};
+      const w=floor.walls.find(w=>w.id===o.wallId),pts=w&&wallPoints(floor,w),center=w&&openingMidpoint(floor,w,o.offset);
+      if(!w||!pts||!center)return null;
+      const L=distance(...pts),d={x:(pts[1].x-pts[0].x)/L,y:(pts[1].y-pts[0].y)/L};
       const a={x:center.x-d.x*o.width/2,y:center.y-d.y*o.width/2};
       const b={x:center.x+d.x*o.width/2,y:center.y+d.y*o.width/2};
-      return <g key={o.id}>
-        <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke="#f9fbff" strokeWidth={wall.thickness+.04}/>
-        <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke={o.kind==='door'?'#cf803a':'#20a2ca'} strokeWidth=".035"/>
+      const color=selectedOpening===o.id?'#df266b':o.kind==='door'?'#cd7d32':'#179bc0';
+      return <g key={o.id} data-opening-id={o.id}>
+        <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke="#f9fbff" strokeWidth={w.thickness+.06}/>
+        <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke={color} strokeWidth=".05"
+          strokeDasharray={o.style==='sliding'?'.12,.045':undefined}/>
+        {o.kind==='door'&&o.style==='hinged'&&<line x1={a.x} y1={a.y} x2={a.x+d.y*o.width*.65} y2={a.y-d.x*o.width*.65} stroke={color} strokeWidth=".025"/>}
+        <circle cx={center.x} cy={center.y} r=".16" fill="transparent" stroke="transparent" strokeWidth=".1"/>
       </g>;
     })}
     {floor.furniture.map(f=><g key={f.id} transform={`rotate(${f.rotation} ${f.x+f.width/2} ${f.y+f.depth/2})`}>
@@ -78,6 +114,6 @@ export function PlanEditor({floor,tool,selectedRoom,onSelect,onAddRoom,onMoveVer
     {drag?.kind==='room'&&<rect x={Math.min(drag.start.x,drag.current.x)} y={Math.min(drag.start.y,drag.current.y)}
       width={Math.abs(drag.start.x-drag.current.x)} height={Math.abs(drag.start.y-drag.current.y)}
       fill="#63aadb" fillOpacity=".2" stroke="#2375a4" strokeWidth=".04" strokeDasharray=".16,.09"/>}
-    {drag?.kind==='vertex'&&drag.vertexId&&<circle cx={drag.current.x} cy={drag.current.y} r=".14" fill="#ed6c3d"/>}
+    {drag?.kind==='vertex'&&<circle cx={drag.current.x} cy={drag.current.y} r=".14" fill="#ed6c3d"/>}
   </svg>;
 }

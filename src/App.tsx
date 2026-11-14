@@ -5,7 +5,9 @@ import type { DrawTool } from './components/PlanEditor';
 import { Viewer3D } from './components/Viewer3D';
 import type { HouseProject, Point } from './domain/model';
 import { emptyProject, exampleProject } from './domain/model';
-import { addRectangle, roomArea, roundGrid } from './domain/geometry';
+import { roomArea, roundGrid, distance, wallPoints } from './domain/geometry';
+import { insertRectangle } from './domain/topology';
+import { addOpening, moveOpening } from './domain/openings';
 import { validateProject } from './domain/validation';
 import { loadDraft, saveDraft } from './storage/local';
 import { loadRemote, saveRemote } from './storage/github';
@@ -26,6 +28,8 @@ export default function App(){
   const [tool,setTool]=useState<DrawTool>('select');
   const [view,setView]=useState<ViewMode>('split');
   const [selectedRoom,setSelectedRoom]=useState<string|null>(null);
+  const [selectedWall,setSelectedWall]=useState<string|null>(null);
+  const [selectedOpening,setSelectedOpening]=useState<string|null>(null);
   const [status,setStatus]=useState('サンプルを読み込みました');
   const [draftStatus,setDraftStatus]=useState<'保存中'|'一時保存済み'|'未保存'>('未保存');
   const [target,setTarget]=useState<GitHubTarget>({owner:'kameusagiyahoo',repo:'Room-Planner-Data',branch:'main',token:''});
@@ -38,6 +42,11 @@ export default function App(){
   const hasErrors=issues.some(x=>x.severity==='error');
   const area=floor.rooms.reduce((s,r)=>s+roomArea(floor,r),0);
   const activeRoom=floor.rooms.find(r=>r.id===selectedRoom);
+  const activeWall=floor.walls.find(w=>w.id===selectedWall);
+  const activeOpening=floor.openings.find(o=>o.id===selectedOpening);
+  const selectRoom=(id:string|null)=>{setSelectedRoom(id);setSelectedWall(null);setSelectedOpening(null);};
+  const selectWall=(id:string|null)=>{setSelectedWall(id);setSelectedRoom(null);setSelectedOpening(null);};
+  const selectOpening=(id:string|null)=>{setSelectedOpening(id);setSelectedWall(null);setSelectedRoom(null);};
 
   useEffect(()=>{
     let alive=true;
@@ -72,13 +81,32 @@ export default function App(){
   };
   const addRoom=(a:Point,b:Point)=>edit(next=>{
     const floor=next.floors[0];
-    addRectangle(floor,a,b,'部屋'+(floor.rooms.length+1));
+    insertRectangle(floor,a,b,'部屋'+(floor.rooms.length+1));
   },'部屋を追加しました');
   const moveVertex=(id:string,p:Point)=>edit(next=>{
     const v=next.floors[0].vertices.find(x=>x.id===id);
     if(!v)throw Error('頂点がありません');
     v.x=roundGrid(p.x);v.y=roundGrid(p.y);
   },'頂点を移動しました');
+  const addDoorOrWindow=(kind:'door'|'window',wallId:string,offset:number)=>edit(next=>{
+    const opening=addOpening(next.floors[0],wallId,offset,kind);
+    setSelectedOpening(opening.id);setSelectedRoom(null);setSelectedWall(null);
+  },kind==='door'?'ドアを追加しました':'窓を追加しました');
+  const repositionOpening=(id:string,offset:number)=>edit(next=>{
+    moveOpening(next.floors[0],id,offset);
+  },'開口部を移動しました');
+  const updateWallThickness=(id:string,thickness:number)=>edit(next=>{
+    const wall=next.floors[0].walls.find(w=>w.id===id);
+    if(wall)wall.thickness=thickness;
+  },'壁厚を更新しました');
+  const updateOpening=(id:string,patch:Record<string,string|number|boolean>)=>edit(next=>{
+    const opening=next.floors[0].openings.find(o=>o.id===id);
+    if(opening)Object.assign(opening,patch);
+  },'開口部を更新しました');
+  const removeOpening=(id:string)=>edit(next=>{
+    next.floors[0].openings=next.floors[0].openings.filter(o=>o.id!==id);
+    setSelectedOpening(null);
+  },'開口部を削除しました');
   const undo=()=>{
     const prev=history.current.pop();if(!prev)return;
     redo.current.push(clone(project));setProject(prev);setStatus('元に戻しました');
@@ -95,7 +123,7 @@ export default function App(){
       if(issues.length)throw Error('不正なファイル: '+issues[0].message);
       const next=parsed as HouseProject;
       replace(next,'JSONを読み込みました');
-      setRemoteId(next.id);setRemoteMeta(null);setSelectedRoom(null);
+      setRemoteId(next.id);setRemoteMeta(null);selectRoom(null);
     }catch(err){setStatus('読み込み失敗: '+String(err));}
   };
   const changeTarget=(field:'owner'|'repo'|'branch'|'token',value:string)=>{
@@ -122,13 +150,13 @@ export default function App(){
       if(issues.length)throw Error('遠隔JSONの検証に失敗: '+issues[0].message);
       replace(file.project,'GitHubから読み込みました');
       setRemoteMeta({key:remoteKey(target,remoteId),sha:file.sha});
-      setSelectedRoom(null);
+      selectRoom(null);
     }catch(e){setStatus('GitHub読込失敗: '+String(e));}
     finally{setBusy(false);}
   };
   const setName=(name:string)=>edit(next=>{next.name=name;},'名前を変更しました');
-  const createNew=()=>{const p=emptyProject();replace(p,'新しい間取りを作成しました');setSelectedRoom(null);setRemoteMeta(null);setRemoteId(p.id);};
-  const startExample=()=>{const p=exampleProject();replace(p,'サンプルを読み込みました');setSelectedRoom(null);setRemoteMeta(null);setRemoteId(p.id);};
+  const createNew=()=>{const p=emptyProject();replace(p,'新しい間取りを作成しました');selectRoom(null);setRemoteMeta(null);setRemoteId(p.id);};
+  const startExample=()=>{const p=exampleProject();replace(p,'サンプルを読み込みました');selectRoom(null);setRemoteMeta(null);setRemoteId(p.id);};
   return <div className="app">
     <header className="header">
       <div className="brand"><strong>Room Planner</strong><span>GitHub Pages / v0.1</span></div>
@@ -153,10 +181,38 @@ export default function App(){
             <button aria-pressed={tool==='select'} onClick={()=>setTool('select')}>選択</button>
             <button aria-pressed={tool==='room'} onClick={()=>{setTool('room');setView('2d');}}>部屋追加</button>
             <button aria-pressed={tool==='vertex'} onClick={()=>{setTool('vertex');setView('2d');}}>頂点移動</button>
+            <button aria-pressed={tool==='door'} onClick={()=>{setTool('door');setView('2d');}}>ドア</button>
+            <button aria-pressed={tool==='window'} onClick={()=>{setTool('window');setView('2d');}}>窓</button>
           </div>
-          <small>{tool==='room'?'間取りの上でドラッグして矩形部屋を追加':tool==='vertex'?'黄色い頂点をドラッグ（共有壁も連動）':'部屋を選択し名前を変更できます'}</small>
+          <small>{tool==='room'?'間取りの上でドラッグして矩形部屋を追加':tool==='vertex'?'黄色い頂点をドラッグ（共有壁も連動）':tool==='door'?'壁をクリックしてドアを配置':tool==='window'?'壁をクリックして窓を配置':'部屋・壁・ドア・窓を選択。開口部はドラッグで移動できます'}</small>
           {activeRoom&&<div className="inspector"><label>部屋名<input value={activeRoom.name} onChange={e=>edit(next=>{const r=next.floors[0].rooms.find(r=>r.id===activeRoom.id);if(r)r.name=e.target.value;},'部屋名を変更')}/></label>
             <div>{roomArea(floor,activeRoom).toFixed(2)}㎡ / {(roomArea(floor,activeRoom)/1.62).toFixed(1)}帖</div></div>}
+
+          {activeWall&&<div className="inspector">
+            <h3>選択中の壁</h3>
+            <div>壁長：{(wallPoints(floor,activeWall)?distance(...wallPoints(floor,activeWall)!):0).toFixed(2)}m</div>
+            <label>壁厚 (m)<input type="number" min=".05" max=".6" step=".01" value={activeWall.thickness} onChange={e=>updateWallThickness(activeWall.id,Number(e.target.value))}/></label>
+            <small>共有壁の頂点を動かすと、隣接する部屋も更新されます。</small>
+          </div>}
+          {activeOpening&&<div className="inspector">
+            <h3>{activeOpening.kind==='door'?'ドア':'窓'}の寸法・種類</h3>
+            <label>幅 (m)<input type="number" min=".3" max="6" step=".05" value={activeOpening.width} onChange={e=>updateOpening(activeOpening.id,{width:Number(e.target.value)})}/></label>
+            <label>高さ (m)<input type="number" min=".3" max="4" step=".05" value={activeOpening.height} onChange={e=>updateOpening(activeOpening.id,{height:Number(e.target.value)})}/></label>
+            {activeOpening.kind==='window'&&<label>床からの高さ (m)<input type="number" min="0" max="3" step=".05" value={activeOpening.sillHeight} onChange={e=>updateOpening(activeOpening.id,{sillHeight:Number(e.target.value)})}/></label>}
+            <label>壁の始点から中央まで (m)<input type="number" min="0" step=".05" value={Number(activeOpening.offset.toFixed(2))} onChange={e=>repositionOpening(activeOpening.id,Number(e.target.value))}/></label>
+            <label>種類<select value={activeOpening.style} onChange={e=>updateOpening(activeOpening.id,{style:e.target.value})}>
+              {activeOpening.kind==='door'?<>
+                <option value="hinged">開き戸</option><option value="sliding">引き戸</option>
+              </>:<><option value="sliding">引き違い窓</option><option value="fixed">FIX窓</option></>}
+            </select></label>
+            {activeOpening.kind==='door'&&<>
+              {activeOpening.style==='hinged'&&<label>左右勝手<select value={activeOpening.swing||'right'} onChange={e=>updateOpening(activeOpening.id,{swing:e.target.value})}>
+                <option value="right">右</option><option value="left">左</option>
+              </select></label>}
+              <label className="check-label"><input type="checkbox" checked={!!activeOpening.open} onChange={e=>updateOpening(activeOpening.id,{open:e.target.checked})}/> 3Dでドアを開く（簡易表示）</label>
+            </>}
+            <button onClick={()=>removeOpening(activeOpening.id)}>このドア・窓を削除</button>
+          </div>}
           <div className="metrics"><strong>{area.toFixed(2)}㎡</strong><span>部屋面積合計（内法概算）</span><strong>{(area/1.62).toFixed(1)}帖</strong></div>
         </section>
         <section className="panel">
@@ -174,7 +230,9 @@ export default function App(){
       </aside>
       <main className={'workspace '+view}>
         {view!=='3d'&&<section className="view-pane"><h2>2D間取り <span>1mグリッド / SVG</span></h2>
-          <div className="view-body"><PlanEditor floor={floor} tool={tool} selectedRoom={selectedRoom} onSelect={setSelectedRoom} onAddRoom={addRoom} onMoveVertex={moveVertex}/></div></section>}
+          <div className="view-body"><PlanEditor floor={floor} tool={tool} selectedRoom={selectedRoom} selectedWall={selectedWall} selectedOpening={selectedOpening}
+          onSelectRoom={selectRoom} onSelectWall={selectWall} onSelectOpening={selectOpening}
+          onAddRoom={addRoom} onMoveVertex={moveVertex} onAddOpening={addDoorOrWindow} onMoveOpening={repositionOpening}/></div></section>}
         {view!=='2d'&&<section className="view-pane"><h2>3D俯瞰 <span>ドラッグ: 回転 / スクロール: 拡大</span></h2>
           <div className="view-body"><Viewer3D floor={floor}/></div></section>}
       </main>
@@ -185,7 +243,7 @@ export default function App(){
         </section>
         <section className="panel"><h2>実装状況</h2>
           <p>利用可能：矩形部屋、頂点ドラッグ、面積、2D/3D、JSON入出力、GitHub手動保存</p>
-          <p>今後：開口部編集、家具カタログ、階段、3D歩行・衝突判定</p>
+          <p>今後：家具カタログ、階段、3D歩行・衝突判定。ドア・窓の編集は基本機能を実装</p>
         </section>
       </aside>
     </div>
