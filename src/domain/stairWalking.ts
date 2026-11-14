@@ -56,7 +56,10 @@ function hasLanding(floor:Floor,s:Stair,t:number):boolean{
  */
 export function traversableRoute(project:HouseProject,route:WalkRoute):boolean{
   const corners=stairFootprint(route.stair);
-  if(!corners.every(p=>onFloor(route.source,p)&&onFloor(route.target,p)))return false;
+  if(![route.source,route.target].every(floor=>floor.rooms.some(room=>{
+    const polygon=roomPolygon(floor,room);
+    return corners.every(p=>pointInPolygon(p,polygon));
+  })))return false;
   if(!hasLanding(route.source,route.stair,-.1)||!hasLanding(route.target,route.stair,1.1))return false;
   for(const floor of [route.source,route.target]){
     const world=makeCollisionWorld(floor);

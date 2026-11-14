@@ -4,7 +4,7 @@ import * as THREE from 'three';
 import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
 import type {Floor,HouseProject,Point} from '../domain/model';
 import {distance,getBounds,pointInPolygon,roomPolygon,wallPoints} from '../domain/geometry';
-import {blocked,makeCollisionWorld,movePlayer,PLAYER_RADIUS} from '../domain/collision';
+import {blocked,movePlayer,PLAYER_RADIUS} from '../domain/collision';
 import {advanceStair,stairwellOpenings,tryEnterStair,walkCollisionWorld,routeForStair} from '../domain/stairWalking';
 import type {StairTraversal} from '../domain/stairWalking';
 import {addFurnitureModels} from '../viewer3d/furnitureMeshes';
@@ -63,10 +63,12 @@ export function BuildingViewer3D({project,activeFloorId,onFloorChange}:Props){
   const poseRef=useRef<Pose|null>(null);
   const travelRef=useRef<StairTraversal|null>(null);
   const internalSwitch=useRef<string|null>(null);
+  const pendingFloor=useRef<string|null>(null);
   useEffect(()=>{
     if(internalSwitch.current===activeFloorId){
       internalSwitch.current=null;return;
     }
+    pendingFloor.current=activeFloorId;
     setCurrentFloor(activeFloorId);
     poseRef.current=null;travelRef.current=null;
   },[activeFloorId]);
@@ -202,6 +204,21 @@ export function BuildingViewer3D({project,activeFloorId,onFloorChange}:Props){
     renderer.domElement.addEventListener('pointercancel',onUp);
     let lastTime=performance.now(),frame=0;
     const render=(now:number)=>{
+      const requested=pendingFloor.current;
+      if(requested){
+        pendingFloor.current=null;
+        const floor=project.floors.find(f=>f.id===requested);
+        if(floor){
+          pose={floorId:floor.id,p:spawnPoint(floor,project,eyeHeight),yaw:pose.yaw,pitch:pose.pitch};
+          poseRef.current=pose;travelRef.current=null;
+          if(!walkRef.current){
+            const bounds=getBounds(floor),span=Math.max(8,bounds.maxX-bounds.minX,bounds.maxY-bounds.minY);
+            const x=(bounds.minX+bounds.maxX)/2,z=-(bounds.minY+bounds.maxY)/2;
+            controls.target.set(x,floor.elevation,z);
+            camera.position.set(x+span*.8,floor.elevation+span*.9,z+span*.8);
+          }
+        }
+      }
       const dt=Math.min(.05,(now-lastTime)/1000);lastTime=now;
       if(walkRef.current){
         controls.enabled=false;

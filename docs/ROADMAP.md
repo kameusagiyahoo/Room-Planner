@@ -16,7 +16,8 @@
 - [ ] GLB/GLTF furniture loading
 - [x] Multi-floor project editing, independent floor selection and per-floor 2D/3D view
 - [x] Stair placement, 2D tread symbols, editable dimensions and linked floor switch
-- [ ] Continuous first-person ascent/descent, slab openings and stairwell collision
+- [x] Continuous first-person stair ascent/descent, cutout in the upper floor surface and reserved stairwell collision
+- [ ] Advanced stair geometry: turning flights, multi-flight landings, accurate handrails and vertical body collisions
 - [ ] Real floorplan sample and trace/calibration workflow
 - [ ] Mobile usability, performance, regression/screenshot tests
 - [ ] Schema migrations and robust diff/conflict UI

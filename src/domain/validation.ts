@@ -1,6 +1,7 @@
 import type {Floor,HouseProject,Point} from './model';
 import {distance,polygonArea,roomPolygon,wallPoints} from './geometry';
 import {furnitureClearances} from './clearance';
+import {routeForStair,traversableRoute} from './stairWalking';
 export type Issue={severity:'error'|'warning';message:string;itemId?:string};
 const EPS=1e-7;
 const orient=(a:Point,b:Point,c:Point)=>(b.x-a.x)*(c.y-a.y)-(b.y-a.y)*(c.x-a.x);
@@ -138,6 +139,12 @@ export function validateProject(value:unknown):Issue[]{
     for(const stair of floor.stairs??[]){
       if(stair.toFloorId===floor.id||!p.floors.some(f=>f.id===stair.toFloorId))
         issues.push({severity:'error',itemId:stair.id,message:'階段の移動先が不正です'});
+      else {
+        const route=routeForStair(p as HouseProject,floor.id,stair.id);
+        if(!route)issues.push({severity:'warning',itemId:stair.id,message:'階段は低い階から高い階へ接続してください'});
+        else if(!traversableRoute(p as HouseProject,route))
+          issues.push({severity:'warning',itemId:stair.id,message:'階段が壁・家具に干渉、または上下階の部屋・踊り場が不足しています（歩行不可）'});
+      }
     }
   }
   return issues;

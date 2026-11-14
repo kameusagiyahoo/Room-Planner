@@ -10,6 +10,7 @@ import { insertRectangle } from './domain/topology';
 import { addOpening, moveOpening } from './domain/openings';
 import {PRESETS,addFurniture,changeFurniture} from './domain/furniture';
 import {addStair,stairDestination} from './domain/stairs';
+import {demoStairProject} from './domain/demoStairProject';
 import {nearestFurnitureClearance,furnitureClearances,minimumPassageDiameter} from './domain/clearance';
 import { validateProject } from './domain/validation';
 import { loadDraft, saveDraft } from './storage/local';
@@ -222,6 +223,9 @@ export default function App(){
   const renameFloor=(name:string)=>edit(next=>{next.floors[activeFloorIndex].name=name;},'階の名前を更新しました');
   const changeElevation=(value:number)=>edit(next=>{next.floors[activeFloorIndex].elevation=value;},'階の高さを更新しました');
   const removeFloor=()=>{
+    if(project.floors.some(other=>other.id!==floor.id&&(other.stairs??[]).some(s=>s.toFloorId===floor.id))){
+      setStatus('他の階の階段が参照しています。先に接続階段を削除してください');return;
+    }
     if(project.floors.length<=1){setStatus('最低1階が必要です');return;}
     const nextId=project.floors.find(f=>f.id!==floor.id)!.id;
     edit(next=>{next.floors.splice(activeFloorIndex,1);},'階を削除しました');
@@ -230,6 +234,10 @@ export default function App(){
   const setName=(name:string)=>edit(next=>{next.name=name;},'名前を変更しました');
   const createNew=()=>{const p=emptyProject();replace(p,'新しい間取りを作成しました');setActiveFloorId(p.floors[0].id);selectRoom(null);setRemoteMeta(null);setRemoteId(p.id);};
   const startExample=()=>{const p=exampleProject();replace(p,'サンプルを読み込みました');setActiveFloorId(p.floors[0].id);selectRoom(null);setRemoteMeta(null);setRemoteId(p.id);};
+  const startStairDemo=()=>{const p=demoStairProject();replace(p,'階段付き2階建ての練習サンプルを読み込みました');
+    setActiveFloorId(p.floors[0].id);selectRoom(null);setSelectedStair(null);setMeasurePoints([]);
+    setRemoteMeta(null);setRemoteId(p.id);setView('3d');
+  };
   return <div className="app">
     <header className="header">
       <div className="brand"><strong>Room Planner</strong><span>GitHub Pages / v0.1</span></div>
@@ -242,7 +250,8 @@ export default function App(){
         <section className="panel">
           <h2>プロジェクト</h2>
           <label>名前<input value={project.name} onChange={e=>setName(e.target.value)}/></label>
-          <div className="actions"><button onClick={createNew}>新規</button><button onClick={startExample}>練習用サンプル</button></div>
+          <div className="actions"><button onClick={createNew}>新規</button><button onClick={startExample}>練習用サンプル</button>
+            <button onClick={startStairDemo}>階段付き2階建て</button></div>
           <div className="actions"><button onClick={undo} disabled={!history.current.length}>戻す</button><button onClick={redoChange} disabled={!redo.current.length}>やり直し</button></div>
           <div className="actions"><button onClick={()=>download(project.id+'.json',JSON.stringify(project,null,2)+'\n')}>JSON出力</button>
             <label className="file-button">JSON読込<input type="file" accept=".json,application/json" onChange={importFile}/></label></div>
@@ -257,7 +266,7 @@ export default function App(){
           <label>床高さ (m)<input type="number" step=".1" value={floor.elevation} onChange={e=>changeElevation(Number(e.target.value))}/></label>
           <div className="actions"><button onClick={addFloor}>階を追加</button>
             <button onClick={removeFloor} disabled={project.floors.length<=1}>現在の階を削除</button></div>
-          <small>各階の間取り・家具・ドア・窓は独立して編集し、プロジェクトJSONには全階を保存します。階段と階間移動は未対応です。</small>
+          <small>各階の間取り・家具・ドア・窓を個別編集。階段を歩いて昇降するには、上下階に階段を収める部屋と踊り場が必要です。</small>
         </section>
         <section className="panel">
           <h2>2D編集</h2>
@@ -287,7 +296,7 @@ export default function App(){
             </label>)}
             <div className="actions"><button onClick={()=>goViaStair(activeStair.id)}>移動先の階へ</button>
               <button onClick={()=>removeStair(activeStair.id)}>階段削除</button></div>
-            <small>階段の3D表示は段板の簡易モデルです。歩行による連続昇降ではなく、階切替で移動します。</small>
+            <small>3D歩行モードで階段の下端・上端から進むと、自動的に昇降します。段板は簡易モデルです。</small>
           </div>}
           {tool==='measure'&&<div className="inspector">
             <h3>通路の幅を概算</h3>
@@ -378,7 +387,7 @@ export default function App(){
         </section>
         <section className="panel"><h2>実装状況</h2>
           <p>利用可能：矩形部屋、頂点ドラッグ、面積、2D/3D、JSON入出力、GitHub手動保存</p>
-          <p>現在：複数階の個別編集、家具カタログ、3D歩行と衝突判定。今後：階段、階間移動、GLB家具読み込み</p>
+          <p>現在：複数階の編集、家具カタログ、3D歩行、階段の連続昇降と床開口。今後：折返し階段、段差の精密物理、GLB家具読み込み</p>
         </section>
       </aside>
     </div>
