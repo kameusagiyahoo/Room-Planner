@@ -5,7 +5,7 @@ PC・iPhone対応の住宅間取り設計と3Dプレビュー。**GitHub Pages**
 ## 開発
 
 ```sh
-npm ci
+npm install
 npm run dev
 npm test
 npm run build
