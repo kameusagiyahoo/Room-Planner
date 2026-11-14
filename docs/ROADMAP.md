@@ -21,6 +21,7 @@
 - [ ] Real floorplan sample and trace/calibration workflow
 - [x] Mobile screen layout: full-height drawing area, bottom action dock and contextual settings sheet
 - [x] SVG view pinch-to-zoom, one-finger pan in select mode, wheel zoom and explicit zoom controls
+- [x] Configurable grid snapping, coordinate nudges and selected-vertex editing
 - [ ] iPhone browser validation, touch edge cases and regression/screenshot tests
 - [x] Add optional stairs schema fields without breaking legacy single-floor projects
 - [ ] Schema migrations and robust diff/conflict UI

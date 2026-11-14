@@ -4,6 +4,9 @@ import { PlanEditor } from './components/PlanEditor';
 import type { DrawTool } from './components/PlanEditor';
 import { BuildingViewer3D } from './components/BuildingViewer3D';
 import { MobileDock } from './components/MobileDock';
+import { NudgePad } from './components/NudgePad';
+import {snapPoint,snapValue,nudgePoint,SNAP_STEPS,snapLabel} from './domain/snap';
+import type {SnapStep} from './domain/snap';
 import type { HouseProject, Point } from './domain/model';
 import { emptyProject, exampleProject, emptyFloor } from './domain/model';
 import { roomArea, roundGrid, distance, wallPoints } from './domain/geometry';
@@ -40,6 +43,8 @@ export default function App(){
   const [selectedOpening,setSelectedOpening]=useState<string|null>(null);
   const [selectedFurniture,setSelectedFurniture]=useState<string|null>(null);
   const [preset,setPreset]=useState<string>('sofa');
+  const [snapStep,setSnapStep]=useState<SnapStep>(.1);
+  const [selectedVertex,setSelectedVertex]=useState<string|null>(null);
   const [selectedStair,setSelectedStair]=useState<string|null>(null);
   const [stairTarget,setStairTarget]=useState<string>('');
   const [measurePoints,setMeasurePoints]=useState<Point[]>([]);
@@ -59,6 +64,7 @@ export default function App(){
   const activeWall=floor.walls.find(w=>w.id===selectedWall);
   const activeOpening=floor.openings.find(o=>o.id===selectedOpening);
   const activeFurniture=floor.furniture.find(f=>f.id===selectedFurniture);
+  const activeVertex=floor.vertices.find(v=>v.id===selectedVertex);
   const activeStair=(floor.stairs??[]).find(s=>s.id===selectedStair);
   const otherFloors=project.floors.filter(f=>f.id!==floor.id);
   const nearestGap=activeFurniture?nearestFurnitureClearance(floor,activeFurniture.id):null;
@@ -66,21 +72,29 @@ export default function App(){
   const measureDistance=measurePoints.length===2?distance(measurePoints[0],measurePoints[1]):null;
   const minimumDiameter=measurePoints.length===2?minimumPassageDiameter(floor,measurePoints[0],measurePoints[1]):null;
   const addMeasurePoint=(point:Point)=>setMeasurePoints(prev=>prev.length>=2?[point]:[...prev,point]);
-  const selectRoom=(id:string|null)=>{setSelectedRoom(id);setSelectedWall(null);setSelectedOpening(null);};
-  const selectWall=(id:string|null)=>{setSelectedWall(id);setSelectedRoom(null);setSelectedOpening(null);};
-  const selectOpening=(id:string|null)=>{setSelectedOpening(id);setSelectedWall(null);setSelectedRoom(null);};
+  const selectRoom=(id:string|null)=>{setSelectedRoom(id);setSelectedWall(null);setSelectedOpening(null);setSelectedVertex(null);};
+  const selectWall=(id:string|null)=>{setSelectedWall(id);setSelectedRoom(null);setSelectedOpening(null);setSelectedVertex(null);};
+  const selectOpening=(id:string|null)=>{setSelectedOpening(id);setSelectedWall(null);setSelectedRoom(null);setSelectedVertex(null);};
 
-  const selectStair=(id:string|null)=>{setSelectedStair(id);setSelectedFurniture(null);setSelectedRoom(null);setSelectedWall(null);setSelectedOpening(null);};
+  const selectStair=(id:string|null)=>{setSelectedVertex(null);setSelectedStair(id);setSelectedFurniture(null);setSelectedRoom(null);setSelectedWall(null);setSelectedOpening(null);};
   const placeStair=(p:Point)=>edit(next=>{
     const destination=stairTarget&&stairTarget!==floor.id?stairTarget:otherFloors[0]?.id;
     if(!destination)throw Error('先に移動先の階を追加してください');
-    const stair=addStair(next.floors[activeFloorIndex],destination,p);
+    const stair=addStair(next.floors[activeFloorIndex],destination,snapPoint(p,snapStep));
     selectStair(stair.id);
   },'階段を配置しました');
   const updateStair=(id:string,patch:Record<string,string|number>)=>edit(next=>{
     const stair=(next.floors[activeFloorIndex].stairs??[]).find(s=>s.id===id);
     if(stair)Object.assign(stair,patch);
   },'階段を更新しました');
+  const moveStair=(id:string,p:Point)=>edit(next=>{
+    const stair=(next.floors[activeFloorIndex].stairs??[]).find(s=>s.id===id);
+    if(stair)Object.assign(stair,snapPoint(p,snapStep));
+  },'階段を移動しました');
+  const nudgeStair=(id:string,dx:number,dy:number)=>{
+    const stair=floor.stairs?.find(s=>s.id===id);if(!stair)return;
+    updateStair(id,nudgePoint(stair,{x:dx,y:dy},snapStep));
+  };
   const removeStair=(id:string)=>edit(next=>{
     const f=next.floors[activeFloorIndex];f.stairs=(f.stairs??[]).filter(s=>s.id!==id);
     setSelectedStair(null);
@@ -90,7 +104,7 @@ export default function App(){
     if(!target){setStatus('移動先の階がありません');return;}
     switchFloor(target.floorId);setView('3d');setStatus('階段で移動先の階を表示しました');
   };
-  const selectFurniture=(id:string|null)=>{setSelectedFurniture(id);setSelectedRoom(null);setSelectedWall(null);setSelectedOpening(null);};
+  const selectFurniture=(id:string|null)=>{setSelectedVertex(null);setSelectedFurniture(id);setSelectedRoom(null);setSelectedWall(null);setSelectedOpening(null);};
   useEffect(()=>{
     let alive=true;
     loadDraft().then(draft=>{
@@ -124,19 +138,26 @@ export default function App(){
   };
   const addRoom=(a:Point,b:Point)=>edit(next=>{
     const floor=next.floors[activeFloorIndex];
-    insertRectangle(floor,a,b,'部屋'+(floor.rooms.length+1));
+    insertRectangle(floor,a,b,'部屋'+(floor.rooms.length+1),snapStep);
   },'部屋を追加しました');
   const moveVertex=(id:string,p:Point)=>edit(next=>{
     const v=next.floors[activeFloorIndex].vertices.find(x=>x.id===id);
     if(!v)throw Error('頂点がありません');
-    v.x=roundGrid(p.x);v.y=roundGrid(p.y);
+    Object.assign(v,snapPoint(p,snapStep));
   },'頂点を移動しました');
+  const selectVertex=(id:string|null)=>{
+    setSelectedVertex(id);setSelectedFurniture(null);setSelectedStair(null);
+    setSelectedRoom(null);setSelectedWall(null);setSelectedOpening(null);
+  };
+  const nudgeVertex=(id:string,dx:number,dy:number)=>{
+    const vertex=floor.vertices.find(v=>v.id===id);if(vertex)moveVertex(id,nudgePoint(vertex,{x:dx,y:dy},snapStep));
+  };
   const addDoorOrWindow=(kind:'door'|'window',wallId:string,offset:number)=>edit(next=>{
-    const opening=addOpening(next.floors[activeFloorIndex],wallId,offset,kind);
+    const opening=addOpening(next.floors[activeFloorIndex],wallId,snapValue(offset,snapStep),kind);
     setSelectedOpening(opening.id);setSelectedRoom(null);setSelectedWall(null);
   },kind==='door'?'ドアを追加しました':'窓を追加しました');
   const repositionOpening=(id:string,offset:number)=>edit(next=>{
-    moveOpening(next.floors[activeFloorIndex],id,offset);
+    moveOpening(next.floors[activeFloorIndex],id,snapValue(offset,snapStep));
   },'開口部を移動しました');
   const updateWallThickness=(id:string,thickness:number)=>edit(next=>{
     const wall=next.floors[activeFloorIndex].walls.find(w=>w.id===id);
@@ -151,15 +172,27 @@ export default function App(){
     setSelectedOpening(null);
   },'開口部を削除しました');
   const place=(p:Point)=>edit(next=>{
-    const f=addFurniture(next.floors[activeFloorIndex],preset,p);
+    const f=addFurniture(next.floors[activeFloorIndex],preset,snapPoint(p,snapStep));
     selectFurniture(f.id);
   },'家具を追加しました');
   const moveFurniture=(id:string,p:Point)=>edit(next=>{
-    changeFurniture(next.floors[activeFloorIndex],id,{x:roundGrid(p.x),y:roundGrid(p.y)});
+    changeFurniture(next.floors[activeFloorIndex],id,snapPoint(p,snapStep));
   },'家具を移動しました');
   const updateFurniture=(id:string,patch:Record<string,string|number>)=>edit(next=>{
     changeFurniture(next.floors[activeFloorIndex],id,patch);
   },'家具を更新しました');
+  const nudgeFurniture=(id:string,dx:number,dy:number)=>{
+    const f=floor.furniture.find(f=>f.id===id);if(!f)return;
+    updateFurniture(id,nudgePoint(f,{x:dx,y:dy},snapStep));
+  };
+  const cloneFurniture=(id:string)=>edit(next=>{
+    const items=next.floors[activeFloorIndex].furniture;
+    const f=items.find(f=>f.id===id);if(!f)return;
+    const newId=globalThis.crypto.randomUUID();
+    items.push({...f,id:'furniture-'+newId,name:f.name+'（コピー）',
+      x:snapValue(f.x+.3,snapStep),y:snapValue(f.y+.3,snapStep)});
+    setSelectedFurniture('furniture-'+newId);
+  },'家具を複製しました');
   const deleteFurniture=(id:string)=>edit(next=>{
     next.floors[activeFloorIndex].furniture=next.floors[activeFloorIndex].furniture.filter(f=>f.id!==id);
     selectFurniture(null);
@@ -215,7 +248,7 @@ export default function App(){
   };
   const switchFloor=(id:string)=>{
     setActiveFloorId(id);setSelectedRoom(null);setSelectedWall(null);setSelectedOpening(null);
-    setSelectedFurniture(null);setMeasurePoints([]);setMobilePanel(null);
+    setSelectedFurniture(null);setSelectedStair(null);setSelectedVertex(null);setMeasurePoints([]);setMobilePanel(null);
   };
   const addFloor=()=>{
     const f=emptyFloor((project.floors.length+1)+'階');
@@ -293,6 +326,11 @@ export default function App(){
         </section>
         <section className="panel panel-tools">
           <h2>2D編集</h2>
+          <label className="snap-settings">グリッド吸着
+            <select value={snapStep} onChange={e=>setSnapStep(Number(e.target.value) as SnapStep)}>
+              {SNAP_STEPS.map(s=><option key={s} value={s}>{snapLabel(s)}</option>)}
+            </select>
+          </label>
           <div className="actions">
             <button aria-pressed={tool==='select'} onClick={()=>setTool('select')}>選択</button>
             <button aria-pressed={tool==='room'} onClick={()=>{setTool('room');setView('2d');}}>部屋追加</button>
@@ -317,6 +355,8 @@ export default function App(){
               <input type="number" step={field==='rotation'?15:.1} value={activeStair[field]}
                 onChange={e=>updateStair(activeStair.id,{[field]:Number(e.target.value)})}/>
             </label>)}
+            <NudgePad step={snapStep||.05} onNudge={(dx,dy)=>nudgeStair(activeStair.id,dx,dy)}/>
+            <div className="actions"><button onClick={()=>updateStair(activeStair.id,{rotation:(activeStair.rotation+90)%360})}>90°回転</button></div>
             <div className="actions"><button onClick={()=>goViaStair(activeStair.id)}>移動先の階へ</button>
               <button onClick={()=>removeStair(activeStair.id)}>階段削除</button></div>
             <small>3D歩行モードで階段の下端・上端から進むと、自動的に昇降します。段板は簡易モデルです。</small>
@@ -345,8 +385,19 @@ export default function App(){
               <input type="number" step={field==='rotation'?15:.05} value={activeFurniture[field]}
                 onChange={e=>updateFurniture(activeFurniture.id,{[field]:Number(e.target.value)})}/>
             </label>)}
-            <div className="actions"><button onClick={()=>updateFurniture(activeFurniture.id,{rotation:(activeFurniture.rotation+90)%360})}>90°回転</button>
+            <NudgePad step={snapStep||.05} onNudge={(dx,dy)=>nudgeFurniture(activeFurniture.id,dx,dy)}/>
+            <div className="actions"><button onClick={()=>cloneFurniture(activeFurniture.id)}>複製</button>
+              <button onClick={()=>updateFurniture(activeFurniture.id,{rotation:(activeFurniture.rotation+90)%360})}>90°回転</button>
             <button onClick={()=>deleteFurniture(activeFurniture.id)}>削除</button></div>
+          </div>}
+          {activeVertex&&<div className="inspector">
+            <h3>壁の頂点の位置</h3>
+            <label>X (m)<input type="number" step=".05" value={activeVertex.x}
+              onChange={e=>moveVertex(activeVertex.id,{x:Number(e.target.value),y:activeVertex.y})}/></label>
+            <label>Y (m)<input type="number" step=".05" value={activeVertex.y}
+              onChange={e=>moveVertex(activeVertex.id,{x:activeVertex.x,y:Number(e.target.value)})}/></label>
+            <NudgePad step={snapStep||.05} onNudge={(dx,dy)=>nudgeVertex(activeVertex.id,dx,dy)}/>
+            <small>接続している壁の形状も一緒に更新されます。部屋の形状が不正になる移動は取り消されます。</small>
           </div>}
           {activeRoom&&<div className="inspector"><label>部屋名<input value={activeRoom.name} onChange={e=>edit(next=>{const r=next.floors[activeFloorIndex].rooms.find(r=>r.id===activeRoom.id);if(r)r.name=e.target.value;},'部屋名を変更')}/></label>
             <div>{roomArea(floor,activeRoom).toFixed(2)}㎡ / {(roomArea(floor,activeRoom)/1.62).toFixed(1)}帖</div></div>}
@@ -393,9 +444,10 @@ export default function App(){
       </aside>
       <main className={'workspace '+view}>
         {view!=='3d'&&<section className="view-pane"><h2>2D間取り <span>{floor.name} / 1mグリッド / SVG</span></h2>
-          <div className="view-body"><PlanEditor floor={floor} tool={tool} measurePoints={measurePoints} onMeasurePoint={addMeasurePoint} selectedRoom={selectedRoom} selectedWall={selectedWall} selectedOpening={selectedOpening} selectedFurniture={selectedFurniture} selectedStair={selectedStair}
-          onSelectRoom={selectRoom} onSelectWall={selectWall} onSelectOpening={selectOpening} onSelectFurniture={selectFurniture} onSelectStair={selectStair}
-          onAddRoom={addRoom} onMoveVertex={moveVertex} onAddOpening={addDoorOrWindow} onMoveOpening={repositionOpening} onAddStair={placeStair} onAddFurniture={place} onMoveFurniture={moveFurniture}/></div></section>}
+          <div className="view-body"><PlanEditor floor={floor} tool={tool} snapStep={snapStep} onSnapChange={setSnapStep}
+          measurePoints={measurePoints} onMeasurePoint={addMeasurePoint} selectedRoom={selectedRoom} selectedWall={selectedWall} selectedOpening={selectedOpening} selectedFurniture={selectedFurniture} selectedStair={selectedStair} selectedVertex={selectedVertex}
+          onSelectRoom={selectRoom} onSelectWall={selectWall} onSelectOpening={selectOpening} onSelectFurniture={selectFurniture} onSelectStair={selectStair} onSelectVertex={selectVertex}
+          onAddRoom={addRoom} onMoveVertex={moveVertex} onAddOpening={addDoorOrWindow} onMoveOpening={repositionOpening} onAddStair={placeStair} onMoveStair={moveStair} onAddFurniture={place} onMoveFurniture={moveFurniture}/></div></section>}
         {view!=='2d'&&<section className="view-pane"><h2>3D表示 <span>{floor.name} / 俯瞰 / 衝突判定付き歩行</span></h2>
           <div className="view-body"><BuildingViewer3D project={project} activeFloorId={floor.id} onFloorChange={switchFloor}/></div></section>}
       </main>

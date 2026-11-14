@@ -1,6 +1,6 @@
 import type { Floor, Point, Room, Wall, WallLink } from './model';
 export const distance=(a:Point,b:Point)=>Math.hypot(a.x-b.x,a.y-b.y);
-export const roundGrid=(v:number,grid=0.1)=>Math.round(v/grid)*grid;
+export const roundGrid=(v:number,grid=0.1)=>Math.round(Math.round(v/grid)*grid*1000)/1000;
 export function wallPoints(floor:Floor,wall:Wall):[Point,Point] | null {
   const a=floor.vertices.find(v=>v.id===wall.a),b=floor.vertices.find(v=>v.id===wall.b);
   return a && b ? [a,b] : null;
