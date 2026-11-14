@@ -4,18 +4,19 @@ import type {Floor,Point} from '../domain/model';
 import {distance,getBounds,openingMidpoint,pointInPolygon,roomArea,roomPolygon,wallPoints} from '../domain/geometry';
 import {offsetForPoint} from '../domain/openings';
 
-export type DrawTool='select'|'room'|'vertex'|'door'|'window';
+export type DrawTool='select'|'room'|'vertex'|'door'|'window'|'furniture';
 type Props={
   floor:Floor;tool:DrawTool;
-  selectedRoom:string|null;selectedWall:string|null;selectedOpening:string|null;
-  onSelectRoom:(id:string|null)=>void;onSelectWall:(id:string|null)=>void;onSelectOpening:(id:string|null)=>void;
+  selectedRoom:string|null;selectedWall:string|null;selectedOpening:string|null;selectedFurniture:string|null;
+  onSelectRoom:(id:string|null)=>void;onSelectWall:(id:string|null)=>void;onSelectOpening:(id:string|null)=>void;onSelectFurniture:(id:string|null)=>void;
   onAddRoom:(a:Point,b:Point)=>void;onMoveVertex:(id:string,p:Point)=>void;
   onAddOpening:(kind:'door'|'window',wallId:string,offset:number)=>void;
   onMoveOpening:(id:string,offset:number)=>void;
+  onAddFurniture:(point:Point)=>void;onMoveFurniture:(id:string,point:Point)=>void;
 };
-type Drag={kind:'room'|'vertex'|'opening';start:Point;current:Point;id?:string};
-export function PlanEditor({floor,tool,selectedRoom,selectedWall,selectedOpening,
-  onSelectRoom,onSelectWall,onSelectOpening,onAddRoom,onMoveVertex,onAddOpening,onMoveOpening}:Props){
+type Drag={kind:'room'|'vertex'|'opening'|'furniture';start:Point;current:Point;id?:string};
+export function PlanEditor({floor,tool,selectedRoom,selectedWall,selectedOpening,selectedFurniture,
+  onSelectRoom,onSelectWall,onSelectOpening,onSelectFurniture,onAddRoom,onMoveVertex,onAddOpening,onMoveOpening,onAddFurniture,onMoveFurniture}:Props){
   const svgRef=useRef<SVGSVGElement>(null),[drag,setDrag]=useState<Drag|null>(null);
   const bounds=getBounds(floor),width=Math.max(8,bounds.maxX-bounds.minX),height=Math.max(6,bounds.maxY-bounds.minY);
   const viewBox=[bounds.minX,bounds.minY,width,height].join(' ');
@@ -35,6 +36,12 @@ export function PlanEditor({floor,tool,selectedRoom,selectedWall,selectedOpening
       const id=el.closest('[data-vertex]')?.getAttribute('data-vertex');
       if(id){setDrag({kind:'vertex',id,start:p,current:p});e.currentTarget.setPointerCapture(e.pointerId);}
       return;
+    }
+    if(tool==='furniture'){onAddFurniture(p);return;}
+    const furnitureId=el.closest('[data-furniture-id]')?.getAttribute('data-furniture-id');
+    if(tool==='select'&&furnitureId){
+      onSelectFurniture(furnitureId);setDrag({kind:'furniture',id:furnitureId,start:p,current:p});
+      e.currentTarget.setPointerCapture(e.pointerId);return;
     }
     const openingId=el.closest('[data-opening-id]')?.getAttribute('data-opening-id');
     if(tool==='select' && openingId){
@@ -57,6 +64,10 @@ export function PlanEditor({floor,tool,selectedRoom,selectedWall,selectedOpening
     const p=toWorld(e);
     if(drag.kind==='room'&&distance(drag.start,p)>0.7)onAddRoom(drag.start,p);
     if(drag.kind==='vertex'&&drag.id&&distance(drag.start,p)>0.03)onMoveVertex(drag.id,p);
+    if(drag.kind==='furniture'&&drag.id&&distance(drag.start,p)>0.03){
+      const f=floor.furniture.find(f=>f.id===drag.id);
+      if(f)onMoveFurniture(drag.id,{x:p.x-f.width/2,y:p.y-f.depth/2});
+    }
     if(drag.kind==='opening'&&drag.id&&distance(drag.start,p)>0.03){
       const opening=floor.openings.find(o=>o.id===drag.id),wall=opening&&floor.walls.find(w=>w.id===opening.wallId);
       if(wall)onMoveOpening(drag.id,offsetForPoint(floor,wall,p));
@@ -106,9 +117,9 @@ export function PlanEditor({floor,tool,selectedRoom,selectedWall,selectedOpening
         <circle cx={center.x} cy={center.y} r=".16" fill="transparent" stroke="transparent" strokeWidth=".1"/>
       </g>;
     })}
-    {floor.furniture.map(f=><g key={f.id} transform={`rotate(${f.rotation} ${f.x+f.width/2} ${f.y+f.depth/2})`}>
-      <rect x={f.x} y={f.y} width={f.width} height={f.depth} rx=".05" stroke="#9d875c" strokeWidth=".025" fill="#f4dba8"/>
-      <text x={f.x+f.width/2} y={f.y+f.depth/2} fill="#685534" textAnchor="middle" fontSize=".15">{f.name}</text>
+    {floor.furniture.map(f=><g key={f.id} data-furniture-id={f.id} transform={`rotate(${f.rotation} ${f.x+f.width/2} ${f.y+f.depth/2})`}>
+      <rect x={f.x} y={f.y} width={f.width} height={f.depth} rx=".05" stroke={selectedFurniture===f.id?"#df266b":"#9d875c"} strokeWidth={selectedFurniture===f.id?".07":".025"} fill="#f4dba8"/>
+      <text x={f.x+f.width/2} y={f.y+f.depth/2} fill="#685534" textAnchor="middle" fontSize=".15" pointerEvents="none">{f.name}</text>
     </g>)}
     {tool==='vertex'&&floor.vertices.map(v=><circle key={v.id} data-vertex={v.id} cx={v.x} cy={v.y} r=".12" fill="#f9a825" stroke="#fff" strokeWidth=".035"/>)}
     {drag?.kind==='room'&&<rect x={Math.min(drag.start.x,drag.current.x)} y={Math.min(drag.start.y,drag.current.y)}

@@ -8,6 +8,7 @@ import { emptyProject, exampleProject } from './domain/model';
 import { roomArea, roundGrid, distance, wallPoints } from './domain/geometry';
 import { insertRectangle } from './domain/topology';
 import { addOpening, moveOpening } from './domain/openings';
+import {PRESETS,addFurniture,changeFurniture} from './domain/furniture';
 import { validateProject } from './domain/validation';
 import { loadDraft, saveDraft } from './storage/local';
 import { loadRemote, saveRemote } from './storage/github';
@@ -30,6 +31,8 @@ export default function App(){
   const [selectedRoom,setSelectedRoom]=useState<string|null>(null);
   const [selectedWall,setSelectedWall]=useState<string|null>(null);
   const [selectedOpening,setSelectedOpening]=useState<string|null>(null);
+  const [selectedFurniture,setSelectedFurniture]=useState<string|null>(null);
+  const [preset,setPreset]=useState<string>('sofa');
   const [status,setStatus]=useState('サンプルを読み込みました');
   const [draftStatus,setDraftStatus]=useState<'保存中'|'一時保存済み'|'未保存'>('未保存');
   const [target,setTarget]=useState<GitHubTarget>({owner:'kameusagiyahoo',repo:'Room-Planner-Data',branch:'main',token:''});
@@ -44,10 +47,12 @@ export default function App(){
   const activeRoom=floor.rooms.find(r=>r.id===selectedRoom);
   const activeWall=floor.walls.find(w=>w.id===selectedWall);
   const activeOpening=floor.openings.find(o=>o.id===selectedOpening);
+  const activeFurniture=floor.furniture.find(f=>f.id===selectedFurniture);
   const selectRoom=(id:string|null)=>{setSelectedRoom(id);setSelectedWall(null);setSelectedOpening(null);};
   const selectWall=(id:string|null)=>{setSelectedWall(id);setSelectedRoom(null);setSelectedOpening(null);};
   const selectOpening=(id:string|null)=>{setSelectedOpening(id);setSelectedWall(null);setSelectedRoom(null);};
 
+  const selectFurniture=(id:string|null)=>{setSelectedFurniture(id);setSelectedRoom(null);setSelectedWall(null);setSelectedOpening(null);};
   useEffect(()=>{
     let alive=true;
     loadDraft().then(draft=>{
@@ -107,6 +112,20 @@ export default function App(){
     next.floors[0].openings=next.floors[0].openings.filter(o=>o.id!==id);
     setSelectedOpening(null);
   },'開口部を削除しました');
+  const place=(p:Point)=>edit(next=>{
+    const f=addFurniture(next.floors[0],preset,p);
+    selectFurniture(f.id);
+  },'家具を追加しました');
+  const moveFurniture=(id:string,p:Point)=>edit(next=>{
+    changeFurniture(next.floors[0],id,{x:roundGrid(p.x),y:roundGrid(p.y)});
+  },'家具を移動しました');
+  const updateFurniture=(id:string,patch:Record<string,string|number>)=>edit(next=>{
+    changeFurniture(next.floors[0],id,patch);
+  },'家具を更新しました');
+  const deleteFurniture=(id:string)=>edit(next=>{
+    next.floors[0].furniture=next.floors[0].furniture.filter(f=>f.id!==id);
+    selectFurniture(null);
+  },'家具を削除しました');
   const undo=()=>{
     const prev=history.current.pop();if(!prev)return;
     redo.current.push(clone(project));setProject(prev);setStatus('元に戻しました');
@@ -183,8 +202,23 @@ export default function App(){
             <button aria-pressed={tool==='vertex'} onClick={()=>{setTool('vertex');setView('2d');}}>頂点移動</button>
             <button aria-pressed={tool==='door'} onClick={()=>{setTool('door');setView('2d');}}>ドア</button>
             <button aria-pressed={tool==='window'} onClick={()=>{setTool('window');setView('2d');}}>窓</button>
+            <button aria-pressed={tool==='furniture'} onClick={()=>{setTool('furniture');setView('2d');}}>家具追加</button>
           </div>
-          <small>{tool==='room'?'間取りの上でドラッグして矩形部屋を追加':tool==='vertex'?'黄色い頂点をドラッグ（共有壁も連動）':tool==='door'?'壁をクリックしてドアを配置':tool==='window'?'壁をクリックして窓を配置':'部屋・壁・ドア・窓を選択。開口部はドラッグで移動できます'}</small>
+          <small>{tool==='room'?'間取りの上でドラッグして矩形部屋を追加':tool==='vertex'?'黄色い頂点をドラッグ（共有壁も連動）':tool==='door'?'壁をクリックしてドアを配置':tool==='window'?'壁をクリックして窓を配置':tool==='furniture'?'家具を選び、図面をタップして配置':'部屋・壁・ドア・窓を選択。開口部はドラッグで移動できます'}</small>
+          {tool==='furniture'&&<label>家具の種類<select value={preset} onChange={e=>setPreset(e.target.value)}>
+            {PRESETS.map(p=><option key={p.kind} value={p.kind}>{p.name} ({p.width}×{p.depth}m)</option>)}
+          </select></label>}
+          {activeFurniture&&<div className="inspector">
+            <h3>家具の編集</h3>
+            <label>名前<input value={activeFurniture.name} onChange={e=>updateFurniture(activeFurniture.id,{name:e.target.value})}/></label>
+            {(['x','y','width','depth','height','rotation'] as const).map(field=><label key={field}>
+              {({x:'X (m)',y:'Y (m)',width:'幅 (m)',depth:'奥行 (m)',height:'高さ (m)',rotation:'回転 (度)'})[field]}
+              <input type="number" step={field==='rotation'?15:.05} value={activeFurniture[field]}
+                onChange={e=>updateFurniture(activeFurniture.id,{[field]:Number(e.target.value)})}/>
+            </label>)}
+            <div className="actions"><button onClick={()=>updateFurniture(activeFurniture.id,{rotation:(activeFurniture.rotation+90)%360})}>90°回転</button>
+            <button onClick={()=>deleteFurniture(activeFurniture.id)}>削除</button></div>
+          </div>}
           {activeRoom&&<div className="inspector"><label>部屋名<input value={activeRoom.name} onChange={e=>edit(next=>{const r=next.floors[0].rooms.find(r=>r.id===activeRoom.id);if(r)r.name=e.target.value;},'部屋名を変更')}/></label>
             <div>{roomArea(floor,activeRoom).toFixed(2)}㎡ / {(roomArea(floor,activeRoom)/1.62).toFixed(1)}帖</div></div>}
 
@@ -230,9 +264,9 @@ export default function App(){
       </aside>
       <main className={'workspace '+view}>
         {view!=='3d'&&<section className="view-pane"><h2>2D間取り <span>1mグリッド / SVG</span></h2>
-          <div className="view-body"><PlanEditor floor={floor} tool={tool} selectedRoom={selectedRoom} selectedWall={selectedWall} selectedOpening={selectedOpening}
-          onSelectRoom={selectRoom} onSelectWall={selectWall} onSelectOpening={selectOpening}
-          onAddRoom={addRoom} onMoveVertex={moveVertex} onAddOpening={addDoorOrWindow} onMoveOpening={repositionOpening}/></div></section>}
+          <div className="view-body"><PlanEditor floor={floor} tool={tool} selectedRoom={selectedRoom} selectedWall={selectedWall} selectedOpening={selectedOpening} selectedFurniture={selectedFurniture}
+          onSelectRoom={selectRoom} onSelectWall={selectWall} onSelectOpening={selectOpening} onSelectFurniture={selectFurniture}
+          onAddRoom={addRoom} onMoveVertex={moveVertex} onAddOpening={addDoorOrWindow} onMoveOpening={repositionOpening} onAddFurniture={place} onMoveFurniture={moveFurniture}/></div></section>}
         {view!=='2d'&&<section className="view-pane"><h2>3D表示 <span>俯瞰 / 衝突判定付き歩行</span></h2>
           <div className="view-body"><Viewer3D floor={floor}/></div></section>}
       </main>

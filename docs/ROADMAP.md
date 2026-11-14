@@ -10,7 +10,8 @@
 - [ ] Full door/window catalog and animations (basic door/window selection, drag, and parametric inspector implemented)
 - [x] Initial first-person walk mode with swept 2D wall/closed-door/window/furniture collision, keyboard and touch controls
 - [ ] Stair and multi-floor navigation, richer physical collisions and automated browser tests
-- [ ] Asset catalog and GLB/GLTF furniture loading
+- [x] Basic furniture catalog, 2D placement/drag, numeric size and rotation, deletion
+- [ ] GLB/GLTF furniture loading
 - [ ] Multi-floor editor and navigation
 - [ ] Real floorplan sample and trace/calibration workflow
 - [ ] Mobile usability, performance, regression/screenshot tests
