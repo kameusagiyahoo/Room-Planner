@@ -8,7 +8,7 @@ describe('shared wall topology',()=>{
   it('adds a partially adjacent room and splits shared wall',()=>{
     const f=emptyFloor();insertRectangle(f,{x:0,y:0},{x:4,y:4},'A');
     const second=insertRectangle(f,{x:4,y:1},{x:7,y:3},'B');
-    expect(f.walls.length).toBe(10);
+    expect(f.walls.length).toBe(9);
     expect(second.boundary.length).toBe(4);
     expect(roomArea(f,f.rooms[0])).toBe(16);
     expect(roomArea(f,second)).toBe(6);
