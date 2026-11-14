@@ -111,6 +111,20 @@ export function Viewer3D({floor}:Props){
       if(cursor<L)at((cursor+L)/2,h/2,L-cursor,h,wallMaterial);
     }
     const disposeFurniture=addFurnitureModels(scene,floor.furniture,floor.elevation);
+    const stairMaterial=new THREE.MeshStandardMaterial({color:0xc7a678,roughness:.85});
+    const stairMeshes:THREE.Group[]=[];
+    for(const stair of floor.stairs??[]){
+      const group=new THREE.Group();
+      const steps=12,stepRise=floor.ceilingHeight/steps;
+      for(let i=0;i<steps;i++){
+        const mesh=new THREE.Mesh(new THREE.BoxGeometry(stair.width,stepRise,stair.run/steps),stairMaterial);
+        mesh.position.set(0,stepRise*(i+.5),-(stair.run*(i+.5)/steps-stair.run/2));
+        group.add(mesh);
+      }
+      group.position.set(stair.x+stair.width/2,floor.elevation,-(stair.y+stair.run/2));
+      group.rotation.y=-stair.rotation*Math.PI/180;
+      scene.add(group);stairMeshes.push(group);
+    }
     const grid=new THREE.GridHelper(Math.max(10,Math.ceil(span)),Math.ceil(span),0xb1c4d5,0xd5e0e8);
     grid.position.set(center.x,floor.elevation-.015,center.z);scene.add(grid);
     const resize=()=>{
@@ -145,7 +159,8 @@ export function Viewer3D({floor}:Props){
       renderer.domElement.removeEventListener('pointermove',move);
       renderer.domElement.removeEventListener('pointerup',up);
       renderer.domElement.removeEventListener('pointercancel',up);
-      disposeFurniture();scene.traverse(o=>{
+      disposeFurniture();stairMeshes.forEach(group=>{group.traverse(o=>{if(o instanceof THREE.Mesh)o.geometry.dispose();});scene.remove(group);});
+      stairMaterial.dispose();scene.traverse(o=>{
       if(o instanceof THREE.Mesh){o.geometry.dispose();}
     });for(const mat of [floorMaterial,wallMaterial,windowMaterial,doorMaterial])mat.dispose();
     grid.geometry.dispose();renderer.dispose();node.removeChild(renderer.domElement);};

@@ -111,6 +111,11 @@ export function validateFloor(floor:Floor):Issue[]{
     if(![f.x,f.y,f.width,f.depth,f.height,f.rotation].every(Number.isFinite)||f.width<=0||f.depth<=0||f.height<=0)
       issues.push({severity:'error',itemId:f.id,message:'家具の寸法が不正'});
   }
+  for(const stair of floor.stairs??[]){
+    if(![stair.x,stair.y,stair.width,stair.run,stair.rotation].every(Number.isFinite)||
+       stair.width<.5||stair.run<1)
+      issues.push({severity:'error',itemId:stair.id,message:'階段の寸法が不正です'});
+  }
   for(const item of furnitureClearances(floor)){
     // Furniture pairs are reported once. Soft warnings do not prevent experimenting or JSON saves.
     if(!item.overlap)continue;
@@ -130,6 +135,10 @@ export function validateProject(value:unknown):Issue[]{
     if(!floor||!Array.isArray(floor.vertices)||!Array.isArray(floor.walls)||!Array.isArray(floor.rooms)||!Array.isArray(floor.openings)||!Array.isArray(floor.furniture))
       return [{severity:'error',message:'階のデータ構造が不正'}];
     issues.push(...validateFloor(floor));
+    for(const stair of floor.stairs??[]){
+      if(stair.toFloorId===floor.id||!p.floors.some(f=>f.id===stair.toFloorId))
+        issues.push({severity:'error',itemId:stair.id,message:'階段の移動先が不正です'});
+    }
   }
   return issues;
 }
