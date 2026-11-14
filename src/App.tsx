@@ -415,7 +415,7 @@ export default function App(){
       </aside>
     </div>
     <MobileDock view={view} tool={tool} floorName={floor.name}
-      selectedName={activeFurniture?.name??activeStair&&'階段'??activeRoom?.name??activeOpening?.kind&&'建具'??activeWall&&'壁'??undefined}
+      selectedName={activeFurniture?.name||activeRoom?.name||(activeStair?'階段':activeOpening?'建具':activeWall?'壁':undefined)}
       onSelectTool={selectTool} onViewChange={v=>{setView(v);setMobilePanel(null);}}
       onOpenPanel={p=>setMobilePanel(current=>current===p?null:p)}
       onUndo={undo} onRedo={redoChange}
