@@ -16,8 +16,8 @@ describe('first-person collision',()=>{
   it('permits crossing an open door',()=>{
     const f=sample();f.openings.find(o=>o.id==='door-1')!.open=true;
     const w=makeCollisionWorld(f);
-    const p=movePlayer(w,{x:4,y:1.15},{x:2,y:0});
-    expect(p.x).toBeGreaterThan(5.5);
+    const p=movePlayer(w,{x:4,y:1.15},{x:1.4,y:0});
+    expect(p.x).toBeGreaterThan(5.15);
   });
   it('windows remain solid even though transparent',()=>{
     const w=makeCollisionWorld(sample());

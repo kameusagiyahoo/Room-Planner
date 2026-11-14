@@ -132,7 +132,7 @@ export function Viewer3D({floor}:Props){
         yaw+=(Number(k.has('arrowleft'))-Number(k.has('arrowright'))+touch.current.turn)*dt*1.9;
         const norm=Math.max(1,Math.hypot(forward,side)),speed=2.1*dt/norm;
         const dx=(Math.sin(yaw)*forward+Math.cos(yaw)*side)*speed;
-        const dy=(-Math.cos(yaw)*forward+Math.sin(yaw)*side)*speed;
+        const dy=(Math.cos(yaw)*forward-Math.sin(yaw)*side)*speed;
         const next=movePlayer(world,player,{x:dx,y:dy});
         player.x=next.x;player.y=next.y;
         camera.position.set(player.x,floor.elevation+eyeHeight,-player.y);
