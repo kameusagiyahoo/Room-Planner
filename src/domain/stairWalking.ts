@@ -62,12 +62,13 @@ export function traversableRoute(project:HouseProject,route:WalkRoute):boolean{
   })))return false;
   if(!hasLanding(route.source,route.stair,-.1)||!hasLanding(route.target,route.stair,1.1))return false;
   for(const floor of [route.source,route.target]){
-    const world=makeCollisionWorld(floor);
-    const s=route.stair;
-    // Sample the centerline, keeping clearance from both sides of the stairs.
-    for(let i=0;i<=12;i++){
-      const p=stairPosition(s,i/12);
-      if(blocked(world,p,Math.min(PLAYER_RADIUS,s.width/2-.02)))return false;
+    const world=makeCollisionWorld(floor),s=route.stair;
+    const landing=stairPosition(s,floor.id===route.source.id?-.1:1.1);
+    if(blocked(world,landing,PLAYER_RADIUS))return false;
+    // Check the center and both sides of the corridor with a player-sized capsule.
+    for(let i=0;i<=12;i++)for(const side of [0,-s.width/2+PLAYER_RADIUS,s.width/2-PLAYER_RADIUS]){
+      const p=stairPosition(s,i/12,side);
+      if(blocked(world,p,PLAYER_RADIUS))return false;
     }
   }
   return true;

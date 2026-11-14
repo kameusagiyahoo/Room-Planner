@@ -14,7 +14,7 @@ type Pose={floorId:string;p:Point;yaw:number;pitch:number};
 const signedArea=(p:Point[])=>p.reduce((s,v,i)=>{
   const q=p[(i+1)%p.length];return s+v.x*q.y-q.x*v.y;
 },0)/2;
-function floorGeometry(floor:Floor,project:HouseProject):THREE.BufferGeometry[]{
+export function floorGeometry(floor:Floor,project:HouseProject):THREE.BufferGeometry[]{
   const geometries:THREE.BufferGeometry[]=[];
   const holes=stairwellOpenings(project,floor.id);
   for(const room of floor.rooms){
@@ -99,6 +99,7 @@ export function BuildingViewer3D({project,activeFloorId,onFloorChange}:Props){
     poseRef.current=pose;
     // Model edits invalidate a partially traversed route.
     travelRef.current=null;
+    const worlds=new Map(project.floors.map(f=>[f.id,walkCollisionWorld(project,f.id,eyeHeight)]));
     scene.add(new THREE.AmbientLight(0xffffff,1.25));
     const sun=new THREE.DirectionalLight(0xffffff,2.1);sun.position.set(10,20,8);scene.add(sun);
     const floorMaterial=new THREE.MeshStandardMaterial({color:0xd9e7dc,side:THREE.DoubleSide});
@@ -246,7 +247,7 @@ export function BuildingViewer3D({project,activeFloorId,onFloorChange}:Props){
             onFloorChangeRef.current(step.floorId);
           }
         }else{
-          const world=walkCollisionWorld(project,pose.floorId,eyeHeight);
+          const world=worlds.get(pose.floorId)??walkCollisionWorld(project,pose.floorId,eyeHeight);
           pose.p=movePlayer(world,pose.p,movement,PLAYER_RADIUS);
           eyeY=(project.floors.find(f=>f.id===pose.floorId)?.elevation??0)+eyeHeight;
         }

@@ -383,7 +383,7 @@ export default function App(){
         </section>
         <section className="panel"><h2>整合性チェック</h2>
           <strong className={hasErrors?'error':'ok'}>{hasErrors?'エラーあり':'基本検証OK'}</strong>
-          <div className="issue-list">{issues.length?issues.map((issue,i)=><p key={i} className="error">{issue.message} {issue.itemId||''}</p>):<small>壁参照・部屋の閉合・開口位置・寸法をチェックしました</small>}</div>
+          <div className="issue-list">{issues.length?issues.map((issue,i)=><p key={i} className={issue.severity==='error'?'error':'warning'}>{issue.message} {issue.itemId||''}</p>):<small>壁参照・部屋の閉合・開口位置・寸法をチェックしました</small>}</div>
         </section>
         <section className="panel"><h2>実装状況</h2>
           <p>利用可能：矩形部屋、頂点ドラッグ、面積、2D/3D、JSON入出力、GitHub手動保存</p>

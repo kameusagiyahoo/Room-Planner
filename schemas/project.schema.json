@@ -295,6 +295,49 @@
             },
             "additionalProperties": false
           }
+        },
+        "stairs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "x",
+              "y",
+              "width",
+              "run",
+              "rotation",
+              "toFloorId"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "x": {
+                "type": "number"
+              },
+              "y": {
+                "type": "number"
+              },
+              "width": {
+                "type": "number",
+                "minimum": 0.6
+              },
+              "run": {
+                "type": "number",
+                "minimum": 1
+              },
+              "rotation": {
+                "type": "number"
+              },
+              "toFloorId": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "additionalProperties": false
+          }
         }
       },
       "additionalProperties": false

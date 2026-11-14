@@ -20,4 +20,5 @@
 - [ ] Advanced stair geometry: turning flights, multi-flight landings, accurate handrails and vertical body collisions
 - [ ] Real floorplan sample and trace/calibration workflow
 - [ ] Mobile usability, performance, regression/screenshot tests
+- [x] Add optional stairs schema fields without breaking legacy single-floor projects
 - [ ] Schema migrations and robust diff/conflict UI
