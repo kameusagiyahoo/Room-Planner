@@ -13,13 +13,22 @@ describe('resizing handles rendering',()=>{
     onSelectRoom:noop,onSelectWall:noop,onSelectOpening:noop,onSelectFurniture:noop,
     onSelectStair:noop,onSelectVertex:noop,onAddRoom:noop,onMoveVertex:noop,
     onAddOpening:noop,onMoveOpening:noop,onAddStair:noop,onMoveStair:noop,
-    onAddFurniture:noop,onMoveFurniture:noop,onResizeFurniture:noop,onResizeRoom:noop
+    onAddFurniture:noop,onMoveFurniture:noop,onResizeFurniture:noop,onResizeRoom:noop,onMoveSharedWall:noop
   };
   it('renders four editable corners for a selected full-size sofa',()=>{
     const html=renderToStaticMarkup(<PlanEditor {...base} selectedFurniture="sofa-1"/>);
     expect(html).toContain('data-resize-furniture="sofa-1"');
     expect(html).toContain('data-resize-corner="se"');
     expect(html).toContain('家具のse角を伸縮');
+  });
+  it('shows a movable orange handle on a selected shared wall',()=>{
+    const html=renderToStaticMarkup(<PlanEditor {...base} selectedWall="w7"/>);
+    expect(html).toContain('data-move-partition="w7"');
+    expect(html).toContain('共有壁を動かす');
+  });
+  it('shows a linked wall handle when selecting either adjoining room',()=>{
+    const html=renderToStaticMarkup(<PlanEditor {...base} selectedRoom="living"/>);
+    expect(html).toContain('data-move-partition="w7"');
   });
   it('offers only nonshared room edges on two adjoining rooms',()=>{
     const html=renderToStaticMarkup(<PlanEditor {...base} selectedRoom="living"/>);

@@ -9,6 +9,8 @@ import {offsetForPoint} from '../domain/openings';
 import {FURNITURE_CORNERS,furnitureCorner,resizeFurnitureCorner,rectangularRoomBounds,
   resizableRoomEdges,roomEdgeMidpoint,proposedRoomBounds} from '../domain/resize';
 import type {FurnitureCorner,RoomEdge} from '../domain/resize';
+import {ROOM_EDGES} from '../domain/resize';
+import {sharedPartitionForWall,sharedPartitionForRoomEdge,partitionMidpoint,proposedPartitionCoordinate} from '../domain/sharedPartition';
 
 export type DrawTool='select'|'room'|'vertex'|'door'|'window'|'furniture'|'measure'|'stairs';
 type Props={
@@ -22,13 +24,14 @@ type Props={
   onAddStair:(point:Point)=>void;onMoveStair:(id:string,point:Point)=>void;onAddFurniture:(point:Point)=>void;onMoveFurniture:(id:string,point:Point)=>void;
   onResizeFurniture:(id:string,corner:FurnitureCorner,p:Point)=>void;
   onResizeRoom:(id:string,edge:RoomEdge,p:Point)=>void;
+  onMoveSharedWall:(wallId:string,coordinate:number)=>void;
 };
-type Drag={kind:'room'|'vertex'|'opening'|'furniture'|'stair'|'tap'|'pan'|'resize-furniture'|'resize-room';
+type Drag={kind:'room'|'vertex'|'opening'|'furniture'|'stair'|'tap'|'pan'|'resize-furniture'|'resize-room'|'partition';
   start:Point;current:Point;id?:string;grab?:Point;action?:DrawTool;screen?:Point;
   corner?:FurnitureCorner;edge?:RoomEdge};
 type Gesture={distance:number;center:Point};
 export function PlanEditor({floor,tool,snapStep,onSnapChange,measurePoints,onMeasurePoint,selectedRoom,selectedWall,selectedOpening,selectedFurniture,selectedStair,selectedVertex,
-  onSelectRoom,onSelectWall,onSelectOpening,onSelectFurniture,onSelectStair,onSelectVertex,onAddRoom,onMoveVertex,onAddOpening,onMoveOpening,onAddStair,onMoveStair,onAddFurniture,onMoveFurniture,onResizeFurniture,onResizeRoom}:Props){
+  onSelectRoom,onSelectWall,onSelectOpening,onSelectFurniture,onSelectStair,onSelectVertex,onAddRoom,onMoveVertex,onAddOpening,onMoveOpening,onAddStair,onMoveStair,onAddFurniture,onMoveFurniture,onResizeFurniture,onResizeRoom,onMoveSharedWall}:Props){
   const svgRef=useRef<SVGSVGElement>(null),[drag,setDrag]=useState<Drag|null>(null);
   const [viewport,setViewport]=useState(initialView);
   const activePointers=useRef(new Map<number,Point>());
@@ -70,6 +73,17 @@ export function PlanEditor({floor,tool,snapStep,onSnapChange,measurePoints,onMea
     if(pinching.current)return;
     const p=toWorld(e),el=e.target as Element;
     if(tool==='select'){
+      const sharedHandle=el.closest('[data-move-partition]');
+      if(sharedHandle){
+        const id=sharedHandle.getAttribute('data-move-partition');
+        const partition=id?sharedPartitionForWall(floor,id):null;
+        if(partition){
+          const midpoint=partitionMidpoint(partition);
+          setDrag({kind:'partition',id:partition.wallId,start:p,current:p,
+            grab:{x:p.x-midpoint.x,y:p.y-midpoint.y}});
+          e.currentTarget.setPointerCapture(e.pointerId);return;
+        }
+      }
       const furnitureHandle=el.closest('[data-resize-furniture]');
       if(furnitureHandle){
         const id=furnitureHandle.getAttribute('data-resize-furniture');
@@ -195,6 +209,13 @@ export function PlanEditor({floor,tool,snapStep,onSnapChange,measurePoints,onMea
     if(drag.kind==='resize-room'&&drag.id&&drag.edge&&distance(drag.start,p)>0.03){
       onResizeRoom(drag.id,drag.edge,{x:p.x-(drag.grab?.x??0),y:p.y-(drag.grab?.y??0)});
     }
+    if(drag.kind==='partition'&&drag.id&&distance(drag.start,p)>0.03){
+      const partition=sharedPartitionForWall(floor,drag.id);
+      if(partition){
+        const value=partition.axis==='x'?p.x-(drag.grab?.x??0):p.y-(drag.grab?.y??0);
+        onMoveSharedWall(drag.id,proposedPartitionCoordinate(partition,value,snapStep));
+      }
+    }
     if(drag.kind==='furniture'&&drag.id&&distance(drag.start,p)>0.03){
       const f=floor.furniture.find(f=>f.id===drag.id);
       if(f)onMoveFurniture(drag.id,targetPosition({...drag,current:p}));
@@ -230,6 +251,17 @@ export function PlanEditor({floor,tool,snapStep,onSnapChange,measurePoints,onMea
   const selectedFurnitureModel=floor.furniture.find(f=>f.id===selectedFurniture);
   const selectedRoomBox=selectedRoom?rectangularRoomBounds(floor,selectedRoom):null;
   const selectedEdges=selectedRoom?resizableRoomEdges(floor,selectedRoom):[];
+  const sharedHandles=selectedWall?
+    (sharedPartitionForWall(floor,selectedWall)?[sharedPartitionForWall(floor,selectedWall)!]:[]):
+    selectedRoom?ROOM_EDGES.flatMap(edge=>{
+      const partition=sharedPartitionForRoomEdge(floor,selectedRoom,edge);
+      return partition?[partition]:[];
+    }):[];
+  const draggingPartition=drag?.kind==='partition'&&drag.id?sharedPartitionForWall(floor,drag.id):null;
+  const previewCoordinate=draggingPartition?
+    proposedPartitionCoordinate(draggingPartition,
+      draggingPartition.axis==='x'?drag!.current.x-(drag!.grab?.x??0):
+        drag!.current.y-(drag!.grab?.y??0),snapStep):null;
   const screenScale=scaleOfSvg();
   const handleRadius=Math.max(.20,Math.min(.75,22/Math.max(1,screenScale)));
   // Tiny furniture cannot have four separate 44px touch targets without overlap.
@@ -358,6 +390,30 @@ export function PlanEditor({floor,tool,snapStep,onSnapChange,measurePoints,onMea
         <text x={p.x} y={p.y+.065} fontSize=".19" textAnchor="middle" fill="#177eaf" pointerEvents="none">
           {edge==='left'||edge==='right'?'↔':'↕'}
         </text>
+      </g>;
+    })}
+    {draggingPartition&&previewCoordinate!==null&&<g pointerEvents="none">
+      <line x1={draggingPartition.axis==='x'?previewCoordinate:draggingPartition.low}
+        x2={draggingPartition.axis==='x'?previewCoordinate:draggingPartition.high}
+        y1={draggingPartition.axis==='y'?previewCoordinate:draggingPartition.low}
+        y2={draggingPartition.axis==='y'?previewCoordinate:draggingPartition.high}
+        stroke="#cb7a1f" strokeWidth=".075" strokeDasharray=".22,.10"/>
+      <text x={draggingPartition.axis==='x'?previewCoordinate+.20:(draggingPartition.low+draggingPartition.high)/2}
+        y={draggingPartition.axis==='y'?previewCoordinate-.22:(draggingPartition.low+draggingPartition.high)/2}
+        fontSize=".24" fill="#99540c" fontWeight="700">
+        {(previewCoordinate).toFixed(2)} m
+      </text>
+    </g>}
+    {tool==='select'&&sharedHandles.map(partition=>{
+      const p=partitionMidpoint(partition);
+      return <g key={partition.wallId} role="button"
+        aria-label="共有壁を動かす" data-move-partition={partition.wallId}
+        className="plan-partition-handle">
+        <circle cx={p.x} cy={p.y} r={handleRadius} fill="transparent" stroke="transparent"/>
+        <circle cx={p.x} cy={p.y} r=".21" fill="#fff9e9" stroke="#cb7a1f" strokeWidth=".075"
+          pointerEvents="none"/>
+        <text x={p.x} y={p.y+.065} fontSize=".22" textAnchor="middle" fill="#9f5a11"
+          pointerEvents="none">{partition.axis==='x'?'↔':'↕'}</text>
       </g>;
     })}
     {tool==='select'&&selectedFurnitureModel&&visibleFurnitureCorners.map(corner=>{
