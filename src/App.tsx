@@ -453,7 +453,7 @@ export default function App(){
             </div>}
             {activeRoomBounds&&<div className="room-dimension-summary">
               幅 {(activeRoomBounds.maxX-activeRoomBounds.minX).toFixed(2)}m × 奥行 {(activeRoomBounds.maxY-activeRoomBounds.minY).toFixed(2)}m
-              <small>{freeRoomEdges.length?'図面の青いハンドルで外壁側の辺を移動できます。':'共有壁を含むため、辺の直接変更はできません。'}</small>
+              <small>青いハンドル：独立した辺を伸縮。橙色ハンドル：接続する複数の部屋を連動調整。対応しない接合ではハンドルを表示しません。</small>
             </div>}
             <label>部屋名<input value={activeRoom.name} onChange={e=>edit(next=>{const r=next.floors[activeFloorIndex].rooms.find(r=>r.id===activeRoom.id);if(r)r.name=e.target.value;},'部屋名を変更')}/></label>
             <div>{roomArea(floor,activeRoom).toFixed(2)}㎡ / {(roomArea(floor,activeRoom)/1.62).toFixed(1)}帖</div></div>}
