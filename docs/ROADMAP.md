@@ -1,0 +1,31 @@
+# Rewrite roadmap
+
+- [x] Branch rewrite/v1; keep main and old app unchanged
+- [x] New React/TypeScript/Vite/Three.js scaffold
+- [x] Shared JSON model, schema, basic validators, unit tests
+- [x] 2D rectangular rooms, vertex drag, area, JSON import/export
+- [x] Basic 3D preview
+- [x] IndexedDB draft and GitHub Contents API explicit save/load
+- [x] Geometric edge splitting and T-junction topology for rectangular room insertion; initial consistency tests
+- [ ] Full door/window catalog and animations (basic door/window selection, drag, and parametric inspector implemented)
+- [x] Initial first-person walk mode with swept 2D wall/closed-door/window/furniture collision, keyboard and touch controls
+- [ ] Stair and multi-floor navigation, richer physical collisions and automated browser tests
+- [x] Basic furniture catalog, 2D placement/drag, numeric size and rotation, deletion
+- [x] Furniture–wall and furniture–furniture top-down interference checks, conservative two-point route clearance estimate
+- [x] Parametric lightweight 3D furniture primitives (sofa, bed, dining, chair, storage, kitchen, appliances)
+- [ ] GLB/GLTF furniture loading
+- [x] Multi-floor project editing, independent floor selection and per-floor 2D/3D view
+- [x] Stair placement, 2D tread symbols, editable dimensions and linked floor switch
+- [x] Continuous first-person stair ascent/descent, cutout in the upper floor surface and reserved stairwell collision
+- [ ] Advanced stair geometry: turning flights, multi-flight landings, accurate handrails and vertical body collisions
+- [ ] Real floorplan sample and trace/calibration workflow
+- [x] Mobile screen layout: full-height drawing area, bottom action dock and contextual settings sheet
+- [x] SVG view pinch-to-zoom, one-finger pan in select mode, wheel zoom and explicit zoom controls
+- [x] Configurable grid snapping, coordinate nudges and selected-vertex editing
+- [x] Furniture corner handles (including rotation), room edge handles for non-shared rectangles and live dimension previews
+- [x] Safe linked movement of straight internal partitions between rectangular rooms, with opening preservation and rollback
+- [x] Continuous T-junction partitions with three or more rectangular rooms, atomic rollback and demonstration floor
+- [ ] Partial-side T junctions and general non-rectangular wall editing
+- [ ] iPhone browser validation, touch edge cases and regression/screenshot tests
+- [x] Add optional stairs schema fields without breaking legacy single-floor projects
+- [ ] Schema migrations and robust diff/conflict UI

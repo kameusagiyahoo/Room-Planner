@@ -1,0 +1,139 @@
+:root{font-family:system-ui,-apple-system,"Segoe UI",sans-serif;color:#1c2d3e;background:#edf1f5;font-synthesis:none}*{box-sizing:border-box}html,body,#root{margin:0;min-height:100%;height:100%}button,input{font:inherit}button,.file-button{cursor:pointer;background:#fff;border:1px solid #c4d0da;color:#1a3142;border-radius:9px;padding:9px 11px;font-size:13px}button:hover,.file-button:hover{border-color:#3679b0}button[aria-pressed=true]{background:#d1e7fa;color:#115380;border-color:#68aad1}button:disabled{opacity:.45;cursor:not-allowed}button.primary{background:#2376a5;color:white;border-color:#2376a5}button.primary:hover{background:#195e87}input{display:block;width:100%;background:#fff;border:1px solid #bbcbd6;border-radius:7px;padding:8px;margin-top:4px;color:#203245}label{display:block;font-size:12px;color:#4f6474;margin-top:10px}small{display:block;color:#667b8b;font-size:11px;line-height:1.5;margin:8px 0}.app{height:100%;min-height:500px;display:flex;flex-direction:column}.header{display:flex;align-items:center;justify-content:space-between;background:#172d42;color:white;padding:9px 14px;gap:14px;min-height:54px}.brand{display:flex;align-items:baseline;gap:10px}.brand strong{font-size:19px}.brand span{font-size:11px;color:#a9c0d2}.header-right{display:flex;gap:6px}.header button{background:transparent;color:#e5f2fc;border-color:#557183}.header button[aria-pressed=true]{background:#cde7fa;color:#1c415a}.layout{display:grid;grid-template-columns:260px minmax(0,1fr) 230px;flex:1;min-height:0;gap:9px;padding:9px}.controls,.right-pane{overflow:auto;min-height:0;display:flex;flex-direction:column;gap:10px}.panel{background:#fff;border-radius:12px;border:1px solid #d2dfe7;padding:12px;box-shadow:0 1px 4px #1b334310}.panel h2{font-size:14px;margin:0 0 8px}.panel p{font-size:12px;line-height:1.6;color:#536b7e}.actions{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}.actions button{flex:1}.file-button{display:inline-flex;align-items:center;justify-content:center;flex:1}.file-button input{display:none}.inspector{border-top:1px solid #e1e7ef;margin-top:10px;padding-top:5px;font-size:12px}.metrics{display:flex;flex-direction:column;border-radius:8px;background:#f0f7fb;padding:10px;margin-top:10px}.metrics strong{font-size:19px;color:#176b93}.metrics span{font-size:10px;color:#658095}.workspace{min-width:0;min-height:0;display:grid;gap:8px}.workspace.split{grid-template-columns:1fr 1fr}.view-pane{display:flex;flex-direction:column;overflow:hidden;min-width:0;min-height:0;background:#fff;border:1px solid #d2dfe7;border-radius:12px}.view-pane h2{display:flex;justify-content:space-between;align-items:center;gap:10px;margin:0;padding:9px 12px;border-bottom:1px solid #d9e1e9;font-size:13px}.view-pane h2 span{font-weight:400;font-size:10px;color:#7d93a1}.view-body{flex:1;position:relative;min-height:0}.plan-svg,.viewer3d{width:100%;height:100%;display:block}.viewer3d canvas{display:block}.status{padding:8px 14px;min-height:36px;background:#fff;border-top:1px solid #cfdae3;font-size:12px;color:#37556a}.error{color:#bb3c33}.ok{color:#17795d}.issue-list{max-height:150px;overflow:auto}@media(max-width:1050px){.layout{grid-template-columns:240px minmax(0,1fr)}.right-pane{display:none}}@media(max-width:730px){html,body,#root{height:auto;min-height:100%}.app{min-height:100dvh;height:auto}.header{flex-wrap:wrap;gap:6px}.layout{display:flex;flex-direction:column}.controls{order:2;overflow:visible}.workspace{order:1;height:58dvh;min-height:330px}.workspace.split{grid-template-columns:1fr;grid-template-rows:1fr 1fr}.right-pane{display:flex;order:3;overflow:visible}.split-button{display:none}.view-pane h2 span{display:none}.status{position:sticky;bottom:0}.brand span{display:none}}
+
+.inspector h3{font-size:13px;margin:8px 0}
+.inspector select{display:block;width:100%;border:1px solid #bbcbd6;background:#fff;border-radius:7px;padding:8px;color:#203245;margin-top:4px}
+.inspector .check-label{display:flex;align-items:center;gap:8px;margin:12px 0}
+.check-label input{width:auto;margin:0}
+
+.viewer-shell{position:relative;width:100%;height:100%;overflow:hidden}
+.viewer-shell .viewer3d{position:absolute;inset:0}
+.walk-toolbar{position:absolute;top:10px;left:10px;display:flex;align-items:center;gap:8px;z-index:2;background:#ffffffde;border-radius:9px;padding:5px}
+.walk-toolbar label{margin:0;display:flex;align-items:center;gap:5px}
+.walk-toolbar select{padding:5px;border:1px solid #bac8d4;border-radius:5px}
+.walk-controls{position:absolute;bottom:14px;left:12px;right:12px;display:flex;justify-content:space-between;align-items:flex-end;z-index:2;pointer-events:none}
+.walk-controls button{pointer-events:auto;touch-action:none;user-select:none;min-width:42px;min-height:42px;font-size:20px;background:#fffdf2ed}
+.walk-dpad{text-align:center}
+.walk-dpad>div,.walk-turn{display:flex;gap:4px}
+.walk-hint{position:absolute;top:57px;left:10px;right:10px;z-index:1;color:#345;pointer-events:none;font-size:11px;text-shadow:0 1px #fff}
+
+
+/* Mobile-first editor: full drawing canvas, reachable controls and modal detail sheet. */
+.mobile-dock,.mobile-scrim,.mobile-sheet-heading,.mobile-header-floor,.mobile-undo{display:none}
+.warning{color:#9b6b10}
+@media(max-width:730px){
+  html,body,#root{height:100%;min-height:0;overscroll-behavior:none}
+  .app{height:100dvh;min-height:0;overflow:hidden;background:#f3f6f8}
+  .header{flex:0 0 auto;min-height:54px;flex-wrap:nowrap;padding:7px 10px;gap:6px}
+  .brand strong{font-size:15px;white-space:nowrap}
+  .brand span{display:none}
+  .header-right{gap:5px;flex-shrink:0}
+  .header-right button{min-width:39px;min-height:37px;padding:7px 9px;font-weight:700}
+  .header .mobile-undo{display:inline-flex;align-items:center;justify-content:center;font-size:21px}
+  .mobile-header-floor{display:flex;align-items:center;gap:5px;min-width:0;margin-left:auto}
+  .mobile-header-floor label{margin:0;color:#b8d0df;font-size:11px}
+  .mobile-header-floor select{max-width:96px;min-width:65px;height:35px;padding:4px;border-radius:7px;border:1px solid #58758a;background:#213e54;color:white;font:inherit;font-size:12px}
+  .header-right .split-button{display:none}
+  .layout{display:block;flex:1;min-height:0;padding:0}
+  .workspace,.workspace.split{display:block;height:100%;min-height:0;margin:0}
+  .workspace.split .view-pane:first-child{display:block;height:100%}
+  .workspace.split .view-pane:last-child{display:none}
+  .view-pane{height:100%;border:0;border-radius:0}
+  .view-pane h2{min-height:32px;padding:5px 12px;font-size:12px}
+  .view-pane h2 span{display:inline;font-size:10px}
+  .view-body{min-height:0;height:100%}
+  .mobile-dock{display:flex;position:relative;flex-direction:column;flex:0 0 auto;z-index:12;background:white;border-top:1px solid #d8e1e8;box-shadow:0 -2px 12px #17344b15;padding:2px 4px calc(6px + env(safe-area-inset-bottom))}
+  .mobile-dock-main{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:2px}
+  .mobile-dock-tool{min-width:0;border:0;border-radius:9px;background:transparent;padding:7px 2px 5px;display:flex;align-items:center;flex-direction:column;gap:2px;min-height:57px}
+  .mobile-dock-tool span{font-size:22px;line-height:24px;font-weight:650}
+  .mobile-dock-tool small{font-size:10px;color:inherit;line-height:13px;margin:0}
+  .mobile-dock-tool[aria-pressed=true]{background:#d6ebfa;color:#0c537c}
+  .mobile-dock-sub{display:flex;align-items:center;gap:4px;overflow-x:auto;padding:3px 1px 0}
+  .mobile-dock-sub>button{flex-shrink:0;min-height:34px;padding:5px 8px;border-radius:7px;font-size:11px}
+  .mobile-dock-view{display:flex;gap:2px;margin-left:auto}
+  .mobile-dock-view button{min-height:34px;min-width:36px;padding:5px 6px}
+  .controls{display:none}
+  .right-pane{display:none}
+  .mobile-sheet-open .controls{display:flex;position:fixed;z-index:30;bottom:0;left:0;right:0;max-height:min(78dvh,710px);overflow-y:auto;overscroll-behavior:contain;min-height:0;gap:0;background:#fff;border-radius:18px 18px 0 0;padding:0 10px calc(16px + env(safe-area-inset-bottom));box-shadow:0 -10px 40px #142c4d35}
+  .mobile-sheet-heading{display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:3;background:white;border-bottom:1px solid #e3e8ee;min-height:47px;padding:8px 4px 8px 8px;font-size:14px}
+  .mobile-sheet-heading button{min-height:37px}
+  .mobile-sheet-open .panel{display:none;border:0;border-radius:0;box-shadow:none;padding:12px 5px}
+  .mobile-sheet-tools .panel-tools,.mobile-sheet-floors .panel-floors,.mobile-sheet-project .panel-project{display:block}
+  .mobile-sheet-check .right-pane{display:flex;position:fixed;bottom:0;left:0;right:0;z-index:30;max-height:74dvh;overflow:auto;padding:52px 12px calc(12px + env(safe-area-inset-bottom));background:white;border-radius:18px 18px 0 0}
+  .mobile-sheet-check .right-pane .panel{display:block}
+  .mobile-sheet-check .controls{display:flex;max-height:45px;min-height:45px;overflow:visible;box-shadow:none;background:transparent;padding:0 14px}
+  .mobile-sheet-check .controls .mobile-sheet-heading{width:100%;border-radius:18px 18px 0 0;padding:0 8px}
+  .mobile-scrim{display:block;position:fixed;inset:0;z-index:20;border:0;border-radius:0;padding:0;background:#102c4480}
+  .mobile-sheet-open .status{display:none}
+  .status{position:relative;flex:0 0 auto;max-height:31px;min-height:0;padding:5px 10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:11px}
+  .panel h2{font-size:15px}
+  .panel label{font-size:13px}
+  .panel input,.panel select{min-height:42px;font-size:16px}
+  .panel button{min-height:42px;font-size:13px}
+  .panel .actions{gap:8px}
+  .panel-tools .actions button{flex:1 1 27%;min-width:75px}
+  .viewer-shell .walk-toolbar{top:8px;left:7px}
+  .viewer-shell .walk-hint{display:none}
+  .viewer-shell .walk-controls{bottom:8px;left:7px;right:7px}
+  .viewer-shell .walk-controls button{min-height:47px;min-width:47px}
+}
+
+/* SVG drawing camera and accessible zoom buttons. */
+.plan-editor-shell{position:relative;width:100%;height:100%;min-height:0;overflow:hidden}
+.plan-editor-shell .plan-svg{width:100%;height:100%;display:block;touch-action:none;user-select:none}
+.plan-zoom{position:absolute;top:10px;right:10px;display:flex;flex-direction:column;gap:5px;z-index:2}
+.plan-zoom button{min-width:42px;min-height:40px;padding:4px 7px;background:#fffef1ed;border:1px solid #b8c9d6;border-radius:9px;box-shadow:0 2px 6px #0d344719;font-size:17px;font-weight:600}
+.plan-zoom button[aria-label="全体表示"]{font-size:11px}
+@media(max-width:730px){
+  .header-right>button:not(.mobile-undo){display:none}
+  .plan-zoom{right:8px;top:8px}
+  .plan-zoom button{min-width:46px;min-height:46px}
+}
+
+/* Contextual diagnostics share the same mobile sheet as the other panels. */
+.mobile-check-panel{display:none}
+@media(max-width:730px){
+  .mobile-sheet-check .mobile-check-panel{display:block;padding:12px 8px 18px}
+  .mobile-check-panel h2{font-size:14px;margin:4px 0 12px}
+  .mobile-check-panel p{font-size:13px;line-height:1.55;margin:8px 0}
+  .mobile-sheet-check .right-pane{display:none}
+  .mobile-sheet-check .controls{max-height:min(78dvh,710px);min-height:0;overflow-y:auto;padding:0 10px calc(16px + env(safe-area-inset-bottom));background:#fff;border-radius:18px 18px 0 0;box-shadow:0 -10px 40px #142c4d35}
+  .mobile-sheet-check .controls .mobile-sheet-heading{min-height:47px;padding:8px 4px 8px 8px}
+}
+
+/* Precision editing: lightweight snap indicator, nudge pad and live drag affordances. */
+.plan-snap-chip{position:absolute;top:10px;left:10px;z-index:3;border-radius:9px;
+  background:#fffffff2;box-shadow:0 2px 6px #14324920;border:1px solid #c7d5df;
+  min-height:38px;padding:7px 10px;font-size:12px;font-weight:650}
+.plan-snap-chip span{color:#638097;padding-left:6px}
+.nudge-control{display:flex;align-items:center;gap:10px;justify-content:space-between;
+  margin:12px 0;padding:10px;border:1px solid #e0e9f0;background:#f7fafc;border-radius:10px}
+.nudge-control>span{font-size:12px;color:#3f5d71}
+.nudge-buttons{display:grid;grid-template-columns:repeat(3,40px);grid-template-rows:repeat(3,38px);gap:3px}
+.nudge-buttons button{min-height:38px;min-width:40px;padding:3px;font-size:19px;
+  border:1px solid #bdcedb;border-radius:8px;background:white}
+.nudge-buttons button:nth-child(1){grid-column:2;grid-row:1}
+.nudge-buttons button:nth-child(2){grid-column:1;grid-row:2}
+.nudge-buttons button:nth-child(3){grid-column:3;grid-row:2}
+.nudge-buttons button:nth-child(4){grid-column:2;grid-row:3}
+@media(max-width:730px){
+  .plan-snap-chip{top:8px;left:8px;min-height:42px}
+  .nudge-buttons{grid-template-columns:repeat(3,46px);grid-template-rows:repeat(3,43px)}
+  .nudge-buttons button{min-width:46px;min-height:43px}
+}
+
+/* Direct dimension-editing grips. Minimum touch target 44px where space allows. */
+.plan-resize-handle{cursor:grab;touch-action:none}
+.plan-resize-handle:active{cursor:grabbing}
+.room-dimension-summary{padding:9px;background:#f3f8fc;border-radius:9px;font-size:13px;font-weight:650;color:#234e69}
+.room-dimension-summary small{font-weight:400;margin:5px 0}
+.dimension-fields{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+.dimension-fields label{margin-top:7px}
+.dimension-fields input:disabled{background:#f0f3f5;color:#80929f}
+
+/* Linked interior partition handles (orange: adjacent rooms resize together). */
+.plan-partition-handle{cursor:ew-resize;touch-action:none}
+.plan-partition-handle:active{cursor:grabbing}
+.shared-wall-inspector{margin-top:10px;padding:10px;border:1px solid #eed6b3;
+  background:#fff9ec;border-radius:10px;font-size:13px}
+.shared-wall-inspector strong{color:#965613}
+.shared-wall-inspector small{margin:6px 0}
