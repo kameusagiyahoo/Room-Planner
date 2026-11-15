@@ -6,6 +6,9 @@ import type {PointerEvent} from 'react';
 import type {Floor,Point} from '../domain/model';
 import {distance,getBounds,openingMidpoint,pointInPolygon,roomArea,roomPolygon,wallPoints} from '../domain/geometry';
 import {offsetForPoint} from '../domain/openings';
+import {FURNITURE_CORNERS,furnitureCorner,resizeFurnitureCorner,rectangularRoomBounds,
+  resizableRoomEdges,roomEdgeMidpoint,proposedRoomBounds} from '../domain/resize';
+import type {FurnitureCorner,RoomEdge} from '../domain/resize';
 
 export type DrawTool='select'|'room'|'vertex'|'door'|'window'|'furniture'|'measure'|'stairs';
 type Props={
@@ -17,11 +20,15 @@ type Props={
   onAddOpening:(kind:'door'|'window',wallId:string,offset:number)=>void;
   onMoveOpening:(id:string,offset:number)=>void;
   onAddStair:(point:Point)=>void;onMoveStair:(id:string,point:Point)=>void;onAddFurniture:(point:Point)=>void;onMoveFurniture:(id:string,point:Point)=>void;
+  onResizeFurniture:(id:string,corner:FurnitureCorner,p:Point)=>void;
+  onResizeRoom:(id:string,edge:RoomEdge,p:Point)=>void;
 };
-type Drag={kind:'room'|'vertex'|'opening'|'furniture'|'stair'|'tap'|'pan';start:Point;current:Point;id?:string;grab?:Point;action?:DrawTool;screen?:Point};
+type Drag={kind:'room'|'vertex'|'opening'|'furniture'|'stair'|'tap'|'pan'|'resize-furniture'|'resize-room';
+  start:Point;current:Point;id?:string;grab?:Point;action?:DrawTool;screen?:Point;
+  corner?:FurnitureCorner;edge?:RoomEdge};
 type Gesture={distance:number;center:Point};
 export function PlanEditor({floor,tool,snapStep,onSnapChange,measurePoints,onMeasurePoint,selectedRoom,selectedWall,selectedOpening,selectedFurniture,selectedStair,selectedVertex,
-  onSelectRoom,onSelectWall,onSelectOpening,onSelectFurniture,onSelectStair,onSelectVertex,onAddRoom,onMoveVertex,onAddOpening,onMoveOpening,onAddStair,onMoveStair,onAddFurniture,onMoveFurniture}:Props){
+  onSelectRoom,onSelectWall,onSelectOpening,onSelectFurniture,onSelectStair,onSelectVertex,onAddRoom,onMoveVertex,onAddOpening,onMoveOpening,onAddStair,onMoveStair,onAddFurniture,onMoveFurniture,onResizeFurniture,onResizeRoom}:Props){
   const svgRef=useRef<SVGSVGElement>(null),[drag,setDrag]=useState<Drag|null>(null);
   const [viewport,setViewport]=useState(initialView);
   const activePointers=useRef(new Map<number,Point>());
@@ -62,6 +69,34 @@ export function PlanEditor({floor,tool,snapStep,onSnapChange,measurePoints,onMea
     }
     if(pinching.current)return;
     const p=toWorld(e),el=e.target as Element;
+    if(tool==='select'){
+      const furnitureHandle=el.closest('[data-resize-furniture]');
+      if(furnitureHandle){
+        const id=furnitureHandle.getAttribute('data-resize-furniture');
+        const corner=furnitureHandle.getAttribute('data-resize-corner') as FurnitureCorner|null;
+        const f=floor.furniture.find(f=>f.id===id);
+        if(f&&corner&&FURNITURE_CORNERS.includes(corner)){
+          const handle=furnitureCorner(f,corner);
+          onSelectFurniture(f.id);
+          setDrag({kind:'resize-furniture',id:f.id,corner,start:p,current:p,
+            grab:{x:p.x-handle.x,y:p.y-handle.y}});
+          e.currentTarget.setPointerCapture(e.pointerId);return;
+        }
+      }
+      const roomHandle=el.closest('[data-resize-room]');
+      if(roomHandle){
+        const id=roomHandle.getAttribute('data-resize-room');
+        const edge=roomHandle.getAttribute('data-resize-edge') as RoomEdge|null;
+        if(id&&edge&&resizableRoomEdges(floor,id).includes(edge)){
+          const box=rectangularRoomBounds(floor,id)!;
+          const handle=roomEdgeMidpoint(box,edge);
+          onSelectRoom(id);
+          setDrag({kind:'resize-room',id,edge,start:p,current:p,
+            grab:{x:p.x-handle.x,y:p.y-handle.y}});
+          e.currentTarget.setPointerCapture(e.pointerId);return;
+        }
+      }
+    }
     if(tool==='stairs'){setDrag({kind:'tap',start:p,current:p,action:'stairs'});return;}
     const stairId=el.closest('[data-stair-id]')?.getAttribute('data-stair-id');
     if(tool==='select'&&stairId){
@@ -154,6 +189,12 @@ export function PlanEditor({floor,tool,snapStep,onSnapChange,measurePoints,onMea
     }
     if(drag.kind==='room'&&distance(drag.start,p)>0.7)onAddRoom(snapPoint(drag.start,snapStep),snapPoint(p,snapStep));
     if(drag.kind==='vertex'&&drag.id&&distance(drag.start,p)>0.03)onMoveVertex(drag.id,snapPoint(p,snapStep));
+    if(drag.kind==='resize-furniture'&&drag.id&&drag.corner&&distance(drag.start,p)>0.03){
+      onResizeFurniture(drag.id,drag.corner,{x:p.x-(drag.grab?.x??0),y:p.y-(drag.grab?.y??0)});
+    }
+    if(drag.kind==='resize-room'&&drag.id&&drag.edge&&distance(drag.start,p)>0.03){
+      onResizeRoom(drag.id,drag.edge,{x:p.x-(drag.grab?.x??0),y:p.y-(drag.grab?.y??0)});
+    }
     if(drag.kind==='furniture'&&drag.id&&distance(drag.start,p)>0.03){
       const f=floor.furniture.find(f=>f.id===drag.id);
       if(f)onMoveFurniture(drag.id,targetPosition({...drag,current:p}));
@@ -177,6 +218,19 @@ export function PlanEditor({floor,tool,snapStep,onSnapChange,measurePoints,onMea
     if(activePointers.current.size===0)pinching.current=false;
     setDrag(null);
   };
+  const resizeFurnitureModel=drag?.kind==='resize-furniture'?floor.furniture.find(f=>f.id===drag.id):null;
+  const resizeFurniturePoint=drag?.kind==='resize-furniture'?
+    {x:drag.current.x-(drag.grab?.x??0),y:drag.current.y-(drag.grab?.y??0)}:null;
+  const resizedFurniture=resizeFurnitureModel&&drag?.corner&&resizeFurniturePoint?
+    {...resizeFurnitureModel,...resizeFurnitureCorner(resizeFurnitureModel,drag.corner,resizeFurniturePoint,snapStep)}:null;
+  const resizeRoomModel=drag?.kind==='resize-room'?rectangularRoomBounds(floor,drag.id??''):null;
+  const resizedRoom=resizeRoomModel&&drag?.edge?proposedRoomBounds(
+    resizeRoomModel,drag.edge,
+    (drag.edge==='left'||drag.edge==='right'?drag.current.x-(drag.grab?.x??0):drag.current.y-(drag.grab?.y??0)),snapStep):null;
+  const selectedFurnitureModel=floor.furniture.find(f=>f.id===selectedFurniture);
+  const selectedRoomBox=selectedRoom?rectangularRoomBounds(floor,selectedRoom):null;
+  const selectedEdges=selectedRoom?resizableRoomEdges(floor,selectedRoom):[];
+  const handleRadius=Math.max(.20,Math.min(.75,22/Math.max(1,scaleOfSvg())));
   const roomStart=drag?.kind==='room'?snapPoint(drag.start,snapStep):null;
   const roomEnd=drag?.kind==='room'?snapPoint(drag.current,snapStep):null;
   const movedFurniture=drag?.kind==='furniture'?floor.furniture.find(f=>f.id===drag.id):null;
@@ -270,6 +324,44 @@ export function PlanEditor({floor,tool,snapStep,onSnapChange,measurePoints,onMea
         {proposed.x.toFixed(2)}, {proposed.y.toFixed(2)} m
       </text>
     </g>}
+    {resizedRoom&&<g pointerEvents="none">
+      <rect x={resizedRoom.minX} y={resizedRoom.minY}
+        width={resizedRoom.maxX-resizedRoom.minX} height={resizedRoom.maxY-resizedRoom.minY}
+        fill="#1b87ce" fillOpacity=".10" stroke="#1475b4" strokeWidth=".06" strokeDasharray=".12,.08"/>
+      <text x={(resizedRoom.minX+resizedRoom.maxX)/2} y={(resizedRoom.minY+resizedRoom.maxY)/2}
+        textAnchor="middle" fill="#11568a" fontSize=".24">
+        {(resizedRoom.maxX-resizedRoom.minX).toFixed(2)} × {(resizedRoom.maxY-resizedRoom.minY).toFixed(2)} m
+      </text>
+    </g>}
+    {resizedFurniture&&<g pointerEvents="none"
+      transform={`rotate(${resizedFurniture.rotation} ${resizedFurniture.x+resizedFurniture.width/2} ${resizedFurniture.y+resizedFurniture.depth/2})`}>
+      <rect x={resizedFurniture.x} y={resizedFurniture.y}
+        width={resizedFurniture.width} height={resizedFurniture.depth}
+        fill="#198bc6" fillOpacity=".20" stroke="#0a76b2" strokeWidth=".055" strokeDasharray=".12,.08"/>
+      <text x={resizedFurniture.x+resizedFurniture.width/2} y={resizedFurniture.y+resizedFurniture.depth/2}
+        fontSize=".18" textAnchor="middle" fill="#125b86">
+        {resizedFurniture.width.toFixed(2)} × {resizedFurniture.depth.toFixed(2)} m
+      </text>
+    </g>}
+    {tool==='select'&&selectedRoom&&selectedRoomBox&&selectedEdges.map(edge=>{
+      const p=roomEdgeMidpoint(selectedRoomBox,edge);
+      return <g key={edge} role="button" aria-label={'部屋の'+edge+'側を伸縮'}
+        data-resize-room={selectedRoom} data-resize-edge={edge} className="plan-resize-handle">
+        <circle cx={p.x} cy={p.y} r={handleRadius} fill="transparent" stroke="transparent"/>
+        <circle cx={p.x} cy={p.y} r=".18" fill="#fff" stroke="#177eaf" strokeWidth=".07" pointerEvents="none"/>
+        <text x={p.x} y={p.y+.065} fontSize=".19" textAnchor="middle" fill="#177eaf" pointerEvents="none">
+          {edge==='left'||edge==='right'?'↔':'↕'}
+        </text>
+      </g>;
+    })}
+    {tool==='select'&&selectedFurnitureModel&&FURNITURE_CORNERS.map(corner=>{
+      const p=furnitureCorner(selectedFurnitureModel,corner);
+      return <g key={corner} role="button" aria-label={'家具の'+corner+'角を伸縮'}
+        data-resize-furniture={selectedFurnitureModel.id} data-resize-corner={corner} className="plan-resize-handle">
+        <circle cx={p.x} cy={p.y} r={handleRadius} fill="transparent" stroke="transparent"/>
+        <circle cx={p.x} cy={p.y} r=".16" fill="#fff" stroke="#df266b" strokeWidth=".075" pointerEvents="none"/>
+      </g>;
+    })}
   </svg>
     <button type="button" className="plan-snap-chip" aria-label={'グリッド吸着: '+snapLabel(snapStep)}
       onClick={()=>onSnapChange(SNAP_STEPS[(SNAP_STEPS.indexOf(snapStep)+1)%SNAP_STEPS.length])}>
