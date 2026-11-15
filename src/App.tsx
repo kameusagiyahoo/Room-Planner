@@ -5,6 +5,8 @@ import type { DrawTool } from './components/PlanEditor';
 import { BuildingViewer3D } from './components/BuildingViewer3D';
 import { MobileDock } from './components/MobileDock';
 import { NudgePad } from './components/NudgePad';
+import {rectangularRoomBounds,resizableRoomEdges,resizeRoomEdge,resizeFurnitureCorner} from './domain/resize';
+import type {RoomEdge,FurnitureCorner} from './domain/resize';
 import {snapPoint,snapValue,nudgePoint,SNAP_STEPS,snapLabel} from './domain/snap';
 import type {SnapStep} from './domain/snap';
 import type { HouseProject, Point } from './domain/model';
@@ -61,6 +63,8 @@ export default function App(){
   const hasErrors=issues.some(x=>x.severity==='error');
   const area=floor.rooms.reduce((s,r)=>s+roomArea(floor,r),0);
   const activeRoom=floor.rooms.find(r=>r.id===selectedRoom);
+  const activeRoomBounds=activeRoom?rectangularRoomBounds(floor,activeRoom.id):null;
+  const freeRoomEdges=activeRoom?resizableRoomEdges(floor,activeRoom.id):[];
   const activeWall=floor.walls.find(w=>w.id===selectedWall);
   const activeOpening=floor.openings.find(o=>o.id===selectedOpening);
   const activeFurniture=floor.furniture.find(f=>f.id===selectedFurniture);
@@ -178,6 +182,15 @@ export default function App(){
   const moveFurniture=(id:string,p:Point)=>edit(next=>{
     changeFurniture(next.floors[activeFloorIndex],id,snapPoint(p,snapStep));
   },'家具を移動しました');
+  const resizeFurniture=(id:string,corner:FurnitureCorner,p:Point)=>edit(next=>{
+    const f=next.floors[activeFloorIndex].furniture.find(f=>f.id===id);
+    if(!f)throw Error('家具が見つかりません');
+    changeFurniture(next.floors[activeFloorIndex],id,resizeFurnitureCorner(f,corner,p,snapStep));
+  },'家具の幅・奥行きを変更しました');
+  const resizeRoom=(id:string,edge:RoomEdge,p:Point)=>edit(next=>{
+    resizeRoomEdge(next.floors[activeFloorIndex],id,edge,
+      edge==='left'||edge==='right'?p.x:p.y,snapStep);
+  },'部屋の寸法を変更しました');
   const updateFurniture=(id:string,patch:Record<string,string|number>)=>edit(next=>{
     changeFurniture(next.floors[activeFloorIndex],id,patch);
   },'家具を更新しました');
@@ -375,6 +388,7 @@ export default function App(){
           </select></label>}
           {activeFurniture&&<div className="inspector">
             <h3>家具の編集</h3>
+            <small>図面上で選択中の家具の角をドラッグすると幅・奥行きを変更できます。</small>
             <div className={nearestGap?.overlap?'error':'ok'}>
               {nearestGap?nearestGap.overlap?'壁・家具に接触または干渉あり':'最小周囲すき間 '+nearestGap.gap.toFixed(2)+' m':'近くに比較対象なし'}
             </div>
@@ -399,7 +413,12 @@ export default function App(){
             <NudgePad step={snapStep||.05} onNudge={(dx,dy)=>nudgeVertex(activeVertex.id,dx,dy)}/>
             <small>接続している壁の形状も一緒に更新されます。部屋の形状が不正になる移動は取り消されます。</small>
           </div>}
-          {activeRoom&&<div className="inspector"><label>部屋名<input value={activeRoom.name} onChange={e=>edit(next=>{const r=next.floors[activeFloorIndex].rooms.find(r=>r.id===activeRoom.id);if(r)r.name=e.target.value;},'部屋名を変更')}/></label>
+          {activeRoom&&<div className="inspector">
+            {activeRoomBounds&&<div className="room-dimension-summary">
+              幅 {(activeRoomBounds.maxX-activeRoomBounds.minX).toFixed(2)}m × 奥行 {(activeRoomBounds.maxY-activeRoomBounds.minY).toFixed(2)}m
+              <small>{freeRoomEdges.length?'図面の青いハンドルで外壁側の辺を移動できます。':'共有壁を含むため、辺の直接変更はできません。'}</small>
+            </div>}
+            <label>部屋名<input value={activeRoom.name} onChange={e=>edit(next=>{const r=next.floors[activeFloorIndex].rooms.find(r=>r.id===activeRoom.id);if(r)r.name=e.target.value;},'部屋名を変更')}/></label>
             <div>{roomArea(floor,activeRoom).toFixed(2)}㎡ / {(roomArea(floor,activeRoom)/1.62).toFixed(1)}帖</div></div>}
 
           {activeWall&&<div className="inspector">
@@ -447,7 +466,8 @@ export default function App(){
           <div className="view-body"><PlanEditor floor={floor} tool={tool} snapStep={snapStep} onSnapChange={setSnapStep}
           measurePoints={measurePoints} onMeasurePoint={addMeasurePoint} selectedRoom={selectedRoom} selectedWall={selectedWall} selectedOpening={selectedOpening} selectedFurniture={selectedFurniture} selectedStair={selectedStair} selectedVertex={selectedVertex}
           onSelectRoom={selectRoom} onSelectWall={selectWall} onSelectOpening={selectOpening} onSelectFurniture={selectFurniture} onSelectStair={selectStair} onSelectVertex={selectVertex}
-          onAddRoom={addRoom} onMoveVertex={moveVertex} onAddOpening={addDoorOrWindow} onMoveOpening={repositionOpening} onAddStair={placeStair} onMoveStair={moveStair} onAddFurniture={place} onMoveFurniture={moveFurniture}/></div></section>}
+          onAddRoom={addRoom} onMoveVertex={moveVertex} onAddOpening={addDoorOrWindow} onMoveOpening={repositionOpening} onAddStair={placeStair} onMoveStair={moveStair} onAddFurniture={place} onMoveFurniture={moveFurniture}
+          onResizeFurniture={resizeFurniture} onResizeRoom={resizeRoom}/></div></section>}
         {view!=='2d'&&<section className="view-pane"><h2>3D表示 <span>{floor.name} / 俯瞰 / 衝突判定付き歩行</span></h2>
           <div className="view-body"><BuildingViewer3D project={project} activeFloorId={floor.id} onFloorChange={switchFloor}/></div></section>}
       </main>
