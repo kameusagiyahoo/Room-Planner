@@ -7,6 +7,7 @@ import { MobileDock } from './components/MobileDock';
 import { NudgePad } from './components/NudgePad';
 import {rectangularRoomBounds,resizableRoomEdges,resizeRoomEdge,resizeFurnitureCorner} from './domain/resize';
 import type {RoomEdge,FurnitureCorner} from './domain/resize';
+import {sharedPartitionForWall,moveSharedPartition} from './domain/sharedPartition';
 import {snapPoint,snapValue,nudgePoint,SNAP_STEPS,snapLabel} from './domain/snap';
 import type {SnapStep} from './domain/snap';
 import type { HouseProject, Point } from './domain/model';
@@ -68,6 +69,7 @@ export default function App(){
   const roomWidthEdge=freeRoomEdges.includes('right')?'right':freeRoomEdges.includes('left')?'left':null;
   const roomDepthEdge=freeRoomEdges.includes('bottom')?'bottom':freeRoomEdges.includes('top')?'top':null;
   const activeWall=floor.walls.find(w=>w.id===selectedWall);
+  const activePartition=activeWall?sharedPartitionForWall(floor,activeWall.id):null;
   const activeOpening=floor.openings.find(o=>o.id===selectedOpening);
   const activeFurniture=floor.furniture.find(f=>f.id===selectedFurniture);
   const activeVertex=floor.vertices.find(v=>v.id===selectedVertex);
@@ -78,9 +80,9 @@ export default function App(){
   const measureDistance=measurePoints.length===2?distance(measurePoints[0],measurePoints[1]):null;
   const minimumDiameter=measurePoints.length===2?minimumPassageDiameter(floor,measurePoints[0],measurePoints[1]):null;
   const addMeasurePoint=(point:Point)=>setMeasurePoints(prev=>prev.length>=2?[point]:[...prev,point]);
-  const selectRoom=(id:string|null)=>{setSelectedRoom(id);setSelectedWall(null);setSelectedOpening(null);setSelectedVertex(null);};
-  const selectWall=(id:string|null)=>{setSelectedWall(id);setSelectedRoom(null);setSelectedOpening(null);setSelectedVertex(null);};
-  const selectOpening=(id:string|null)=>{setSelectedOpening(id);setSelectedWall(null);setSelectedRoom(null);setSelectedVertex(null);};
+  const selectRoom=(id:string|null)=>{setSelectedRoom(id);setSelectedWall(null);setSelectedOpening(null);setSelectedFurniture(null);setSelectedStair(null);setSelectedVertex(null);};
+  const selectWall=(id:string|null)=>{setSelectedWall(id);setSelectedRoom(null);setSelectedOpening(null);setSelectedFurniture(null);setSelectedStair(null);setSelectedVertex(null);};
+  const selectOpening=(id:string|null)=>{setSelectedOpening(id);setSelectedWall(null);setSelectedRoom(null);setSelectedFurniture(null);setSelectedStair(null);setSelectedVertex(null);};
 
   const selectStair=(id:string|null)=>{setSelectedVertex(null);setSelectedStair(id);setSelectedFurniture(null);setSelectedRoom(null);setSelectedWall(null);setSelectedOpening(null);};
   const placeStair=(p:Point)=>edit(next=>{
@@ -169,6 +171,9 @@ export default function App(){
     const wall=next.floors[activeFloorIndex].walls.find(w=>w.id===id);
     if(wall)wall.thickness=thickness;
   },'壁厚を更新しました');
+  const shiftSharedWall=(id:string,coordinate:number)=>edit(next=>{
+    moveSharedPartition(next.floors[activeFloorIndex],id,coordinate,snapStep);
+  },'共有壁と隣接する2部屋の寸法を更新しました');
   const updateOpening=(id:string,patch:Record<string,string|number|boolean>)=>edit(next=>{
     const opening=next.floors[activeFloorIndex].openings.find(o=>o.id===id);
     if(opening)Object.assign(opening,patch);
@@ -449,7 +454,20 @@ export default function App(){
             <h3>選択中の壁</h3>
             <div>壁長：{(wallPoints(floor,activeWall)?distance(...wallPoints(floor,activeWall)!):0).toFixed(2)}m</div>
             <label>壁厚 (m)<input type="number" min=".05" max=".6" step=".01" value={activeWall.thickness} onChange={e=>updateWallThickness(activeWall.id,Number(e.target.value))}/></label>
-            <small>共有壁の頂点を動かすと、隣接する部屋も更新されます。</small>
+            {activePartition?<div className="shared-wall-inspector">
+              <strong>共有壁を連動移動</strong>
+              <small>橙色ハンドルをドラッグするか、位置を入力すると隣接する2部屋が連動します。</small>
+              <label>{activePartition.axis==='x'?'X座標 (m)':'Y座標 (m)'}
+                <input type="number" step={snapStep||.05} min={activePartition.minCoordinate}
+                  max={activePartition.maxCoordinate} value={Number(activePartition.coordinate.toFixed(3))}
+                  onChange={e=>shiftSharedWall(activePartition.wallId,Number(e.target.value))}/>
+              </label>
+              <div className="actions">
+                <button onClick={()=>shiftSharedWall(activePartition.wallId,activePartition.coordinate-(snapStep||.05))}>− {Math.round((snapStep||.05)*100)}cm</button>
+                <button onClick={()=>shiftSharedWall(activePartition.wallId,activePartition.coordinate+(snapStep||.05))}>＋ {Math.round((snapStep||.05)*100)}cm</button>
+              </div>
+              <small>各部屋の幅・奥行きは最低0.5m。建具の配置が不正になる場合、変更を取り消します。</small>
+            </div>:<small>複雑なT字接合・一部だけ共有する壁は連動移動に未対応です。頂点編集で調整できます。</small>}
           </div>}
           {activeOpening&&<div className="inspector">
             <h3>{activeOpening.kind==='door'?'ドア':'窓'}の寸法・種類</h3>
@@ -491,7 +509,7 @@ export default function App(){
           measurePoints={measurePoints} onMeasurePoint={addMeasurePoint} selectedRoom={selectedRoom} selectedWall={selectedWall} selectedOpening={selectedOpening} selectedFurniture={selectedFurniture} selectedStair={selectedStair} selectedVertex={selectedVertex}
           onSelectRoom={selectRoom} onSelectWall={selectWall} onSelectOpening={selectOpening} onSelectFurniture={selectFurniture} onSelectStair={selectStair} onSelectVertex={selectVertex}
           onAddRoom={addRoom} onMoveVertex={moveVertex} onAddOpening={addDoorOrWindow} onMoveOpening={repositionOpening} onAddStair={placeStair} onMoveStair={moveStair} onAddFurniture={place} onMoveFurniture={moveFurniture}
-          onResizeFurniture={resizeFurniture} onResizeRoom={resizeRoom}/></div></section>}
+          onResizeFurniture={resizeFurniture} onResizeRoom={resizeRoom} onMoveSharedWall={shiftSharedWall}/></div></section>}
         {view!=='2d'&&<section className="view-pane"><h2>3D表示 <span>{floor.name} / 俯瞰 / 衝突判定付き歩行</span></h2>
           <div className="view-body"><BuildingViewer3D project={project} activeFloorId={floor.id} onFloorChange={switchFloor}/></div></section>}
       </main>
