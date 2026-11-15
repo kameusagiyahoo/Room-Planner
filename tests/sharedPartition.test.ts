@@ -75,6 +75,98 @@ describe('linked partition editor',()=>{
    })!;
    expect(sharedPartitionForWall(f,w.id)).toBeNull();
  });
+ it('moves a vertical T-junction dividing one large and two small rooms',()=>{
+   const f=emptyFloor();
+   const a=insertRectangle(f,{x:0,y:0},{x:4,y:6},'LDK');
+   const b=insertRectangle(f,{x:4,y:0},{x:8,y:3},'洋室');
+   const c=insertRectangle(f,{x:4,y:3},{x:8,y:6},'子ども部屋');
+   const segments=f.walls.filter(w=>{
+     const start=f.vertices.find(v=>v.id===w.a),end=f.vertices.find(v=>v.id===w.b);
+     return start?.x===4&&end?.x===4;
+   });
+   expect(segments).toHaveLength(2);
+   const p=sharedPartitionForWall(f,segments[0].id)!;
+   expect(p).not.toBeNull();
+   expect(p.roomIds).toHaveLength(3);
+   expect(p.wallIds).toHaveLength(2);
+   expect(p.vertexIds).toHaveLength(3);
+   expect(sharedPartitionForWall(f,segments[1].id)?.wallIds).toEqual(p.wallIds);
+   expect(sharedPartitionForRoomEdge(f,a.id,'right')?.wallIds).toEqual(p.wallIds);
+   moveSharedPartition(f,segments[1].id,5.5,.1);
+   expect(roomArea(f,a)).toBeCloseTo(33);
+   expect(roomArea(f,b)).toBeCloseTo(7.5);
+   expect(roomArea(f,c)).toBeCloseTo(7.5);
+   expect(validateFloor(f).filter(i=>i.severity==='error')).toEqual([]);
+ });
+ it('keeps a horizontal T-junction and updates all three rooms',()=>{
+   const f=emptyFloor();
+   const a=insertRectangle(f,{x:0,y:0},{x:3,y:4},'北1');
+   const b=insertRectangle(f,{x:3,y:0},{x:6,y:4},'北2');
+   const c=insertRectangle(f,{x:0,y:4},{x:6,y:8},'南');
+   const wall=f.walls.find(w=>{
+     const a=f.vertices.find(v=>v.id===w.a),b=f.vertices.find(v=>v.id===w.b);
+     return a?.y===4&&b?.y===4;
+   })!;
+   const p=sharedPartitionForWall(f,wall.id)!;
+   expect(p.roomIds).toHaveLength(3);
+   moveSharedPartition(f,wall.id,3,.1);
+   expect(roomArea(f,a)).toBeCloseTo(9);
+   expect(roomArea(f,b)).toBeCloseTo(9);
+   expect(roomArea(f,c)).toBeCloseTo(30);
+   expect(validateFloor(f).filter(i=>i.severity==='error')).toEqual([]);
+ });
+ it('keeps offsets on moved shared door and preserves window center on branch',()=>{
+   const f=emptyFloor();
+   insertRectangle(f,{x:0,y:0},{x:4,y:6},'A');
+   insertRectangle(f,{x:4,y:0},{x:8,y:3},'B');
+   insertRectangle(f,{x:4,y:3},{x:8,y:6},'C');
+   const partitionWalls=f.walls.filter(w=>{
+      const a=f.vertices.find(v=>v.id===w.a),b=f.vertices.find(v=>v.id===w.b);
+      return a?.x===4&&b?.x===4;
+   });
+   const door=addOpening(f,partitionWalls[0].id,1.5,'door');
+   const branch=f.walls.find(w=>{
+      const a=f.vertices.find(v=>v.id===w.a),b=f.vertices.find(v=>v.id===w.b);
+      return a?.y===3&&b?.y===3&&Math.max(a.x,b.x)===8;
+   })!;
+   const window=addOpening(f,branch.id,2.5,'window');
+   const before=openingMidpoint(f,branch,window.offset)!;
+   moveSharedPartition(f,partitionWalls[0].id,4.5,.1);
+   expect(door.offset).toBeCloseTo(1.5);
+   expect(openingMidpoint(f,branch,window.offset)?.x).toBeCloseTo(before.x);
+   expect(validateFloor(f).filter(i=>i.severity==='error')).toEqual([]);
+ });
+ it('clamps all affected room widths on a three-room partition',()=>{
+   const f=emptyFloor();
+   insertRectangle(f,{x:0,y:0},{x:4,y:6},'A');
+   insertRectangle(f,{x:4,y:0},{x:8,y:3},'B');
+   insertRectangle(f,{x:4,y:3},{x:8,y:6},'C');
+   const wall=f.walls.find(w=>{
+     const a=f.vertices.find(v=>v.id===w.a),b=f.vertices.find(v=>v.id===w.b);
+     return a?.x===4&&b?.x===4;
+   })!;
+   const p=sharedPartitionForWall(f,wall.id)!;
+   expect(proposedPartitionCoordinate(p,-100,.1)).toBe(.5);
+   expect(proposedPartitionCoordinate(p,100,.1)).toBe(7.5);
+ });
+ it('rolls back a failed T-junction move without changing any vertices or openings',()=>{
+   const f=emptyFloor();
+   insertRectangle(f,{x:0,y:0},{x:4,y:6},'A');
+   insertRectangle(f,{x:4,y:0},{x:8,y:3},'B');
+   insertRectangle(f,{x:4,y:3},{x:8,y:6},'C');
+   const partition=f.walls.find(w=>{
+     const a=f.vertices.find(v=>v.id===w.a),b=f.vertices.find(v=>v.id===w.b);
+     return a?.x===4&&b?.x===4;
+   })!;
+   const wall=f.walls.find(w=>{
+     const a=f.vertices.find(v=>v.id===w.a),b=f.vertices.find(v=>v.id===w.b);
+     return a?.y===0&&b?.y===0&&Math.max(a.x,b.x)===4;
+   })!;
+   addOpening(f,wall.id,3,'window');
+   const before=JSON.stringify(f);
+   expect(()=>moveSharedPartition(f,partition.id,.5,.1)).toThrow('取り消しました');
+   expect(JSON.stringify(f)).toBe(before);
+ });
  it('does not change any coordinates on rejected move due to opening being trapped',()=>{
    const f=emptyFloor();insertRectangle(f,{x:0,y:0},{x:4,y:4},'A');
    insertRectangle(f,{x:4,y:0},{x:8,y:4},'B');
