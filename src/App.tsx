@@ -18,6 +18,7 @@ import { addOpening, moveOpening } from './domain/openings';
 import {PRESETS,addFurniture,changeFurniture} from './domain/furniture';
 import {addStair,stairDestination} from './domain/stairs';
 import {demoStairProject} from './domain/demoStairProject';
+import {junctionDemoProject} from './domain/junctionDemoProject';
 import {nearestFurnitureClearance,furnitureClearances,minimumPassageDiameter} from './domain/clearance';
 import { validateProject } from './domain/validation';
 import { loadDraft, saveDraft } from './storage/local';
@@ -294,6 +295,12 @@ export default function App(){
     setActiveFloorId(p.floors[0].id);selectRoom(null);setSelectedStair(null);setMeasurePoints([]);
     setRemoteMeta(null);setRemoteId(p.id);setView('3d');
   };
+  const startJunctionDemo=()=>{
+    const p=junctionDemoProject();
+    replace(p,'T字接合の3部屋サンプルを読み込みました');
+    setActiveFloorId(p.floors[0].id);selectRoom(null);setSelectedStair(null);setMeasurePoints([]);
+    setRemoteMeta(null);setRemoteId(p.id);setTool('select');setView('2d');setMobilePanel(null);
+  };
   const selectTool=(next:DrawTool)=>{
     setTool(next);setView('2d');
     setMobilePanel(next==='furniture'||next==='stairs'?'tools':null);
@@ -327,7 +334,8 @@ export default function App(){
           <h2>プロジェクト</h2>
           <label>名前<input value={project.name} onChange={e=>setName(e.target.value)}/></label>
           <div className="actions"><button onClick={createNew}>新規</button><button onClick={startExample}>練習用サンプル</button>
-            <button onClick={startStairDemo}>階段付き2階建て</button></div>
+            <button onClick={startStairDemo}>階段付き2階建て</button>
+            <button onClick={startJunctionDemo}>T字接合3部屋</button></div>
           <div className="actions"><button onClick={undo} disabled={!history.current.length}>戻す</button><button onClick={redoChange} disabled={!redo.current.length}>やり直し</button></div>
           <div className="actions"><button onClick={()=>download(project.id+'.json',JSON.stringify(project,null,2)+'\n')}>JSON出力</button>
             <label className="file-button">JSON読込<input type="file" accept=".json,application/json" onChange={importFile}/></label></div>
@@ -456,7 +464,7 @@ export default function App(){
             <label>壁厚 (m)<input type="number" min=".05" max=".6" step=".01" value={activeWall.thickness} onChange={e=>updateWallThickness(activeWall.id,Number(e.target.value))}/></label>
             {activePartition?<div className="shared-wall-inspector">
               <strong>共有壁を連動移動</strong>
-              <small>橙色ハンドルをドラッグするか、位置を入力すると隣接する2部屋が連動します。</small>
+              <small>橙色ハンドルをドラッグするか、位置を入力すると接続する{activePartition.roomIds.length}部屋が連動します。</small>
               <label>{activePartition.axis==='x'?'X座標 (m)':'Y座標 (m)'}
                 <input type="number" step={snapStep||.05} min={activePartition.minCoordinate}
                   max={activePartition.maxCoordinate} value={Number(activePartition.coordinate.toFixed(3))}
@@ -467,7 +475,7 @@ export default function App(){
                 <button onClick={()=>shiftSharedWall(activePartition.wallId,activePartition.coordinate+(snapStep||.05))}>＋ {Math.round((snapStep||.05)*100)}cm</button>
               </div>
               <small>各部屋の幅・奥行きは最低0.5m。建具の配置が不正になる場合、変更を取り消します。</small>
-            </div>:<small>複雑なT字接合・一部だけ共有する壁は連動移動に未対応です。頂点編集で調整できます。</small>}
+            </div>:<small>不完全なT字接合・斜め壁・部屋の一部だけの共有壁は、形状を守るため連動移動に未対応です。</small>}
           </div>}
           {activeOpening&&<div className="inspector">
             <h3>{activeOpening.kind==='door'?'ドア':'窓'}の寸法・種類</h3>

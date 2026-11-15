@@ -24,7 +24,8 @@
 - [x] Configurable grid snapping, coordinate nudges and selected-vertex editing
 - [x] Furniture corner handles (including rotation), room edge handles for non-shared rectangles and live dimension previews
 - [x] Safe linked movement of straight internal partitions between rectangular rooms, with opening preservation and rollback
-- [ ] Multi-room T-junction partition transforms and general non-rectangular walls
+- [x] Continuous T-junction partitions with three or more rectangular rooms, atomic rollback and demonstration floor
+- [ ] Partial-side T junctions and general non-rectangular wall editing
 - [ ] iPhone browser validation, touch edge cases and regression/screenshot tests
 - [x] Add optional stairs schema fields without breaking legacy single-floor projects
 - [ ] Schema migrations and robust diff/conflict UI
