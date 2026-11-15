@@ -65,6 +65,8 @@ export default function App(){
   const activeRoom=floor.rooms.find(r=>r.id===selectedRoom);
   const activeRoomBounds=activeRoom?rectangularRoomBounds(floor,activeRoom.id):null;
   const freeRoomEdges=activeRoom?resizableRoomEdges(floor,activeRoom.id):[];
+  const roomWidthEdge=freeRoomEdges.includes('right')?'right':freeRoomEdges.includes('left')?'left':null;
+  const roomDepthEdge=freeRoomEdges.includes('bottom')?'bottom':freeRoomEdges.includes('top')?'top':null;
   const activeWall=floor.walls.find(w=>w.id===selectedWall);
   const activeOpening=floor.openings.find(o=>o.id===selectedOpening);
   const activeFurniture=floor.furniture.find(f=>f.id===selectedFurniture);
@@ -388,7 +390,7 @@ export default function App(){
           </select></label>}
           {activeFurniture&&<div className="inspector">
             <h3>家具の編集</h3>
-            <small>図面上で選択中の家具の角をドラッグすると幅・奥行きを変更できます。</small>
+            <small>図面上で選択中の家具の角をドラッグすると幅・奥行きを変更できます。小さい家具は拡大すると四隅のハンドルが表示されます。</small>
             <div className={nearestGap?.overlap?'error':'ok'}>
               {nearestGap?nearestGap.overlap?'壁・家具に接触または干渉あり':'最小周囲すき間 '+nearestGap.gap.toFixed(2)+' m':'近くに比較対象なし'}
             </div>
@@ -414,6 +416,28 @@ export default function App(){
             <small>接続している壁の形状も一緒に更新されます。部屋の形状が不正になる移動は取り消されます。</small>
           </div>}
           {activeRoom&&<div className="inspector">
+            {activeRoomBounds&&<div className="dimension-fields">
+              <label>部屋の幅 (m)
+                <input type="number" min=".5" step=".05" disabled={!roomWidthEdge}
+                  value={Number((activeRoomBounds.maxX-activeRoomBounds.minX).toFixed(2))}
+                  onChange={e=>{
+                    if(!roomWidthEdge)return;
+                    const desired=Number(e.target.value);
+                    resizeRoom(activeRoom.id,roomWidthEdge,{
+                      x:roomWidthEdge==='right'?activeRoomBounds.minX+desired:activeRoomBounds.maxX-desired,y:0});
+                  }}/>
+              </label>
+              <label>部屋の奥行き (m)
+                <input type="number" min=".5" step=".05" disabled={!roomDepthEdge}
+                  value={Number((activeRoomBounds.maxY-activeRoomBounds.minY).toFixed(2))}
+                  onChange={e=>{
+                    if(!roomDepthEdge)return;
+                    const desired=Number(e.target.value);
+                    resizeRoom(activeRoom.id,roomDepthEdge,{
+                      x:0,y:roomDepthEdge==='bottom'?activeRoomBounds.minY+desired:activeRoomBounds.maxY-desired});
+                  }}/>
+              </label>
+            </div>}
             {activeRoomBounds&&<div className="room-dimension-summary">
               幅 {(activeRoomBounds.maxX-activeRoomBounds.minX).toFixed(2)}m × 奥行 {(activeRoomBounds.maxY-activeRoomBounds.minY).toFixed(2)}m
               <small>{freeRoomEdges.length?'図面の青いハンドルで外壁側の辺を移動できます。':'共有壁を含むため、辺の直接変更はできません。'}</small>

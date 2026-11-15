@@ -230,7 +230,13 @@ export function PlanEditor({floor,tool,snapStep,onSnapChange,measurePoints,onMea
   const selectedFurnitureModel=floor.furniture.find(f=>f.id===selectedFurniture);
   const selectedRoomBox=selectedRoom?rectangularRoomBounds(floor,selectedRoom):null;
   const selectedEdges=selectedRoom?resizableRoomEdges(floor,selectedRoom):[];
-  const handleRadius=Math.max(.20,Math.min(.75,22/Math.max(1,scaleOfSvg())));
+  const screenScale=scaleOfSvg();
+  const handleRadius=Math.max(.20,Math.min(.75,22/Math.max(1,screenScale)));
+  // Tiny furniture cannot have four separate 44px touch targets without overlap.
+  // Show the southeast handle until the user zooms in sufficiently.
+  const visibleFurnitureCorners=selectedFurnitureModel&&
+    Math.min(selectedFurnitureModel.width,selectedFurnitureModel.depth)*screenScale<55?
+      FURNITURE_CORNERS.filter(c=>c==='se'):FURNITURE_CORNERS;
   const roomStart=drag?.kind==='room'?snapPoint(drag.start,snapStep):null;
   const roomEnd=drag?.kind==='room'?snapPoint(drag.current,snapStep):null;
   const movedFurniture=drag?.kind==='furniture'?floor.furniture.find(f=>f.id===drag.id):null;
@@ -354,7 +360,7 @@ export function PlanEditor({floor,tool,snapStep,onSnapChange,measurePoints,onMea
         </text>
       </g>;
     })}
-    {tool==='select'&&selectedFurnitureModel&&FURNITURE_CORNERS.map(corner=>{
+    {tool==='select'&&selectedFurnitureModel&&visibleFurnitureCorners.map(corner=>{
       const p=furnitureCorner(selectedFurnitureModel,corner);
       return <g key={corner} role="button" aria-label={'家具の'+corner+'角を伸縮'}
         data-resize-furniture={selectedFurnitureModel.id} data-resize-corner={corner} className="plan-resize-handle">

@@ -22,6 +22,7 @@
 - [x] Mobile screen layout: full-height drawing area, bottom action dock and contextual settings sheet
 - [x] SVG view pinch-to-zoom, one-finger pan in select mode, wheel zoom and explicit zoom controls
 - [x] Configurable grid snapping, coordinate nudges and selected-vertex editing
+- [x] Furniture corner handles (including rotation), room edge handles for non-shared rectangles and live dimension previews
 - [ ] iPhone browser validation, touch edge cases and regression/screenshot tests
 - [x] Add optional stairs schema fields without breaking legacy single-floor projects
 - [ ] Schema migrations and robust diff/conflict UI

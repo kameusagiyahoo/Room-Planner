@@ -120,3 +120,12 @@
   .nudge-buttons{grid-template-columns:repeat(3,46px);grid-template-rows:repeat(3,43px)}
   .nudge-buttons button{min-width:46px;min-height:43px}
 }
+
+/* Direct dimension-editing grips. Minimum touch target 44px where space allows. */
+.plan-resize-handle{cursor:grab;touch-action:none}
+.plan-resize-handle:active{cursor:grabbing}
+.room-dimension-summary{padding:9px;background:#f3f8fc;border-radius:9px;font-size:13px;font-weight:650;color:#234e69}
+.room-dimension-summary small{font-weight:400;margin:5px 0}
+.dimension-fields{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+.dimension-fields label{margin-top:7px}
+.dimension-fields input:disabled{background:#f0f3f5;color:#80929f}
